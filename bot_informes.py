@@ -79,55 +79,124 @@ _HEADERS = {
 }
 
 
-def extraer_og_image(url):
-    """Descarga la og:image / twitter:image del artículo y la guarda en MEDIA_DIR."""
-    if not url.startswith("http"):
+def _guardar_imagen_bytes(data: bytes, content_type: str, key: str) -> Path:
+    """Guarda bytes de imagen en MEDIA_DIR con nombre único."""
+    ct  = content_type.lower()
+    ext = ".png" if "png" in ct else ".gif" if "gif" in ct else ".jpg"
+    fname = hashlib.md5(key.encode()).hexdigest()[:14] + ext
+    dest  = MEDIA_DIR / fname
+    dest.write_bytes(data)
+    return dest
+
+
+def _descargar_imagen_url(img_url: str, base_url: str = "") -> Path | None:
+    """Descarga una imagen desde img_url (resuelve rutas relativas con base_url)."""
+    if not img_url:
         return None
-    # Links de Telegram no se pueden scrape directamente
-    if "t.me" in url or "telegram.me" in url:
-        return None
+    if img_url.startswith("//"):
+        img_url = "https:" + img_url
+    elif img_url.startswith("/") and base_url:
+        from urllib.parse import urlparse
+        p = urlparse(base_url)
+        img_url = f"{p.scheme}://{p.netloc}{img_url}"
     try:
-        from bs4 import BeautifulSoup
-        r = requests.get(url, timeout=15, headers=_HEADERS)
+        ir = requests.get(img_url, timeout=20, headers=_HEADERS)
+        ir.raise_for_status()
+        return _guardar_imagen_bytes(ir.content, ir.headers.get("content-type", "image/jpeg"), img_url)
+    except Exception as e:
+        print(f"[BOT-INFORMES] Error descargando imagen {img_url[:60]}: {e}")
+    return None
+
+
+def _extraer_imagen_youtube(url: str) -> Path | None:
+    """Obtiene thumbnail de YouTube sin API."""
+    m = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
+    if not m:
+        return None
+    vid = m.group(1)
+    for quality in ("maxresdefault", "hqdefault", "mqdefault"):
+        thumb = f"https://img.youtube.com/vi/{vid}/{quality}.jpg"
+        try:
+            r = requests.get(thumb, timeout=10, headers=_HEADERS)
+            if r.status_code == 200 and len(r.content) > 5000:
+                return _guardar_imagen_bytes(r.content, "image/jpeg", thumb)
+        except Exception:
+            pass
+    return None
+
+
+def _extraer_imagen_telegram(url: str) -> Path | None:
+    """Intenta obtener la imagen de un post público de Telegram."""
+    from bs4 import BeautifulSoup
+    embed_url = re.sub(r'\?.*$', '', url) + "?embed=1&mode=tme"
+    try:
+        r = requests.get(embed_url, timeout=15, headers=_HEADERS)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        img_url = None
+        # og:image en el embed
+        for prop, attr in [("property", "og:image"), ("name", "og:image")]:
+            tag = soup.find("meta", {prop: attr})
+            if tag and tag.get("content"):
+                return _descargar_imagen_url(tag["content"], url)
+
+        # Imagen dentro del widget del mensaje
+        for cls in ("tgme_widget_message_photo_image", "tgme_widget_message_photo"):
+            img = soup.find(["img", "i"], class_=re.compile(cls))
+            if img:
+                src = img.get("src") or img.get("data-src") or ""
+                if src:
+                    return _descargar_imagen_url(src, url)
+
+        # background-image en style
+        for tag in soup.find_all(style=re.compile(r"background-image")):
+            m = re.search(r"url\(['\"]?(https?://[^'\")\s]+)['\"]?\)", tag.get("style", ""))
+            if m:
+                return _descargar_imagen_url(m.group(1), url)
+    except Exception as e:
+        print(f"[BOT-INFORMES] Error Telegram embed {url}: {e}")
+    return None
+
+
+def _extraer_imagen_og(url: str) -> Path | None:
+    """Extrae og:image / twitter:image de cualquier página web."""
+    from bs4 import BeautifulSoup
+    try:
+        r = requests.get(url, timeout=15, headers=_HEADERS)
+        soup = BeautifulSoup(r.text, "html.parser")
         for prop, attr in [
             ("property", "og:image"),
             ("name",     "og:image"),
             ("property", "twitter:image"),
             ("name",     "twitter:image"),
+            ("itemprop", "image"),
         ]:
             tag = soup.find("meta", {prop: attr})
             if tag and tag.get("content"):
-                img_url = tag["content"]
-                break
-
-        if not img_url:
-            return None
-
-        # Convertir a URL absoluta si es relativa
-        if img_url.startswith("//"):
-            img_url = "https:" + img_url
-        elif img_url.startswith("/"):
-            from urllib.parse import urlparse
-            p = urlparse(url)
-            img_url = f"{p.scheme}://{p.netloc}{img_url}"
-
-        ir = requests.get(img_url, timeout=20, headers=_HEADERS)
-        ir.raise_for_status()
-
-        ct  = ir.headers.get("content-type", "image/jpeg").lower()
-        ext = ".png" if "png" in ct else ".jpg"
-        fname = hashlib.md5(img_url.encode()).hexdigest()[:14] + ext
-        dest  = MEDIA_DIR / fname
-        dest.write_bytes(ir.content)
-        print(f"[BOT-INFORMES] Imagen scrapeada: {fname} ← {url[:60]}")
-        return dest
-
+                return _descargar_imagen_url(tag["content"], url)
     except Exception as e:
-        print(f"[BOT-INFORMES] No se pudo obtener imagen de {url}: {e}")
+        print(f"[BOT-INFORMES] Error og:image {url}: {e}")
     return None
+
+
+def extraer_og_image(url: str) -> Path | None:
+    """Punto de entrada: detecta el tipo de URL y extrae la mejor imagen disponible."""
+    if not url.startswith("http"):
+        return None
+
+    result = None
+    try:
+        if "youtube.com" in url or "youtu.be" in url:
+            result = _extraer_imagen_youtube(url)
+        elif "t.me" in url or "telegram.me" in url:
+            result = _extraer_imagen_telegram(url)
+        else:
+            result = _extraer_imagen_og(url)
+    except Exception as e:
+        print(f"[BOT-INFORMES] extraer_og_image({url[:50]}): {e}")
+
+    if result:
+        print(f"[BOT-INFORMES] Imagen extraída: {result.name} ← {url[:65]}")
+    return result
 
 
 # ── Telegram helpers ─────────────────────────────────────────────────────────
