@@ -235,6 +235,14 @@
   .btn-generar{width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#1b5e20,#2e7d32);color:#fff;font-size:.9rem;font-weight:800;cursor:pointer;margin-bottom:8px}
   .btn-generar:active{opacity:.85}
   .btn-generar:disabled{opacity:.5;cursor:not-allowed}
+  .btn-importar{
+    width:100%;padding:12px;border:none;border-radius:12px;
+    background:linear-gradient(135deg,#4a148c,#7b1fa2);
+    color:#fff;font-size:.85rem;font-weight:800;cursor:pointer;margin-bottom:8px;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+  }
+  .btn-importar:active{opacity:.85}
+  .btn-importar:disabled{opacity:.5;cursor:not-allowed}
 
   /* ── Badge IA y media en minutas ── */
   .minuta-ia{
@@ -396,6 +404,11 @@
     </div>
   </div>
   <div id="lista-minutas"><p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Sin minutas guardadas</p></div>
+
+  <!-- Importar del grupo -->
+  <button class="btn-importar" id="btn-importar" onclick="escanearGrupo()">
+    &#128229; Importar minutas del grupo
+  </button>
 
   <!-- Generar informe -->
   <button class="btn-generar" id="btn-generar" onclick="generarInforme()">
@@ -711,6 +724,31 @@ async function limpiarMinutas() {
   await fetch('/api/minutas', {method:'DELETE'});
   await loadMinutas();
   showToast('Minutas borradas', 'ok');
+}
+
+async function escanearGrupo() {
+  const btn = document.getElementById('btn-importar');
+  btn.disabled = true;
+  btn.innerHTML = '&#9203; Escaneando grupo…';
+  showLoading('Importando minutas del grupo…');
+  try {
+    const r = await fetch('/api/escanear-grupo', {method: 'POST'});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Error');
+    await loadMinutas();
+    showToast(
+      d.importadas > 0
+        ? d.importadas + ' minuta(s) importada(s) del grupo'
+        : 'Sin minutas nuevas en el grupo',
+      d.importadas > 0 ? 'ok' : ''
+    );
+  } catch(e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoading();
+    btn.disabled = false;
+    btn.innerHTML = '&#128229; Importar minutas del grupo';
+  }
 }
 
 async function generarInforme() {

@@ -256,6 +256,16 @@ def delete_minuta(idx: int):
     return {"ok": True, "total": len(minutas)}
 
 
+@app.post("/api/escanear-grupo")
+def escanear_grupo():
+    try:
+        from bot_informes import escanear_grupo as _scan
+        importadas = _scan()
+        return {"ok": True, "importadas": importadas}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/generar-informe")
 def api_generar_informe():
     minutas = cargar_minutas()

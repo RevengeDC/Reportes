@@ -294,6 +294,15 @@ def _save_offset(v):
 
 # ── Procesamiento de mensajes ────────────────────────────────────────────────
 
+def _texto_duplicado(texto):
+    """Devuelve True si ese texto_original ya existe en las minutas guardadas."""
+    if not texto:
+        return False
+    from informes import cargar_minutas
+    t = texto.strip()
+    return any(m.get("texto_original", "").strip() == t for m in cargar_minutas())
+
+
 def procesar_mensaje(token, msg):
     from informes import cargar_minutas, guardar_minutas
 
@@ -301,6 +310,11 @@ def procesar_mensaje(token, msg):
 
     # Ignorar mensajes sin contenido relevante
     if not texto and "photo" not in msg and "video" not in msg and "document" not in msg:
+        return
+
+    # Evitar duplicados
+    if _texto_duplicado(texto):
+        print(f"[BOT-INFORMES] Duplicado ignorado: {texto[:50]}")
         return
 
     media = []
@@ -391,6 +405,56 @@ def procesar_mensaje(token, msg):
     minutas.append(minuta)
     guardar_minutas(minutas)
     print(f"[BOT-INFORMES] Minuta {fecha_str} {hora_str} | fotos:{n_fotos} links:{n_links} | {contenido[:55]}")
+
+
+# ── Escaneo manual (importar del grupo) ─────────────────────────────────────
+
+def escanear_grupo():
+    """
+    Recorre TODOS los mensajes pendientes del queue de Telegram (offset=0)
+    y convierte en minutas los que no estén ya guardados.
+    Retorna la cantidad de minutas nuevas importadas.
+    """
+    token = get_bot_token()
+    if not token:
+        return 0
+
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Snapshot de textos ya existentes para deduplicar sin leer el archivo en cada iteración
+    from informes import cargar_minutas
+    existentes = {m.get("texto_original", "").strip() for m in cargar_minutas() if m.get("texto_original")}
+
+    importadas = 0
+    offset     = 0
+
+    print("[BOT-INFORMES] Iniciando escaneo manual del grupo…")
+    while True:
+        try:
+            result  = tg_get_updates(token, offset)
+            updates = result.get("result", [])
+            if not updates:
+                break
+            for upd in updates:
+                msg = upd.get("message") or upd.get("channel_post")
+                if msg:
+                    texto = (msg.get("text") or msg.get("caption") or "").strip()
+                    tiene_media = "photo" in msg or "video" in msg or "document" in msg
+                    if texto or tiene_media:
+                        if texto not in existentes:
+                            procesar_mensaje(token, msg)
+                            existentes.add(texto)
+                            importadas += 1
+                offset = upd["update_id"] + 1
+            _save_offset(offset)
+            if len(updates) < 100:
+                break
+        except Exception as e:
+            print(f"[BOT-INFORMES] Error escaneo: {e}")
+            break
+
+    print(f"[BOT-INFORMES] Escaneo terminado. {importadas} minuta(s) nueva(s).")
+    return importadas
 
 
 # ── Loop principal ───────────────────────────────────────────────────────────
