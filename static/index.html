@@ -188,6 +188,78 @@
   .toast.err{background:#b71c1c}
 
   .spacer{height:28px}
+
+  /* ── Tabs ── */
+  .tabs{display:flex;gap:0;margin-bottom:12px;border-radius:12px;overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.1)}
+  .tab-btn{flex:1;padding:11px 8px;border:none;font-size:.8rem;font-weight:700;cursor:pointer;transition:background .2s,color .2s}
+  .tab-btn.active{background:#1a237e;color:#fff}
+  .tab-btn:not(.active){background:#fff;color:#555}
+  .tab-panel{display:none}
+  .tab-panel.active{display:block}
+
+  /* ── Formulario minuta ── */
+  .form-card{background:#fff;border-radius:14px;padding:14px 15px;margin-bottom:10px;box-shadow:0 1px 5px rgba(0,0,0,.09)}
+  .form-card .form-title{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#1a237e;margin-bottom:10px}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+  .form-field{display:flex;flex-direction:column;gap:4px}
+  .form-field label{font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.4px}
+  .form-field input,.form-field textarea,.form-field select{
+    border:1.5px solid #c5cae9;border-radius:8px;padding:8px 10px;
+    font-size:.8rem;font-family:inherit;color:#1a1a2e;background:#fff;
+  }
+  .form-field input:focus,.form-field textarea:focus{outline:none;border-color:#1a237e}
+  .form-field textarea{resize:vertical;min-height:70px}
+  .btn-agregar{width:100%;padding:11px;border:none;border-radius:10px;background:#1a237e;color:#fff;font-size:.82rem;font-weight:700;cursor:pointer;margin-top:4px}
+  .btn-agregar:active{opacity:.85}
+
+  /* ── Lista minutas ── */
+  .minutas-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .minutas-header .sec-title{margin:0}
+  .btn-clear{border:none;background:#b71c1c;color:#fff;font-size:.7rem;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer}
+  .minuta-item{background:#fff;border-radius:10px;padding:11px 13px;margin-bottom:7px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;gap:10px;align-items:flex-start}
+  .minuta-num{width:26px;height:26px;border-radius:50%;background:#1a237e;color:#fff;font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .minuta-body{flex:1;min-width:0}
+  .minuta-meta{font-size:.65rem;color:#888;margin-bottom:3px}
+  .minuta-hecho{font-size:.75rem;line-height:1.4;color:#222;word-break:break-word}
+  .minuta-del{border:none;background:none;color:#b71c1c;font-size:.9rem;cursor:pointer;padding:2px 4px;flex-shrink:0}
+
+  /* ── Informe ── */
+  .rango-card{background:#e8eaf6;border-radius:10px;padding:10px 13px;margin-bottom:10px;font-size:.75rem;color:#1a237e;font-weight:600}
+  .btn-generar{width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#1b5e20,#2e7d32);color:#fff;font-size:.9rem;font-weight:800;cursor:pointer;margin-bottom:8px}
+  .btn-generar:active{opacity:.85}
+  .btn-generar:disabled{opacity:.5;cursor:not-allowed}
+
+  /* ── Badge IA y media en minutas ── */
+  .minuta-ia{
+    display:inline-flex;align-items:center;gap:2px;
+    background:#6a1b9a;color:#fff;
+    font-size:.56rem;font-weight:800;
+    padding:2px 6px;border-radius:5px;
+    margin-left:5px;text-transform:uppercase;letter-spacing:.3px;vertical-align:middle;
+  }
+  .minuta-media{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .minuta-thumb{
+    width:56px;height:56px;object-fit:cover;border-radius:7px;
+    cursor:pointer;border:2px solid #e0e0e0;
+    transition:transform .12s;
+  }
+  .minuta-thumb:active{transform:scale(.93)}
+  .minuta-link{
+    display:inline-flex;align-items:center;gap:3px;
+    background:#e3f2fd;color:#1565c0;
+    font-size:.63rem;padding:3px 8px;border-radius:6px;
+    text-decoration:none;max-width:180px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .minuta-video{
+    display:inline-flex;align-items:center;gap:3px;
+    background:#fce4ec;color:#c62828;
+    font-size:.63rem;padding:3px 8px;border-radius:6px;
+  }
+  .info-bot{
+    background:#f3e5f5;border-radius:10px;padding:9px 12px;margin-bottom:10px;
+    font-size:.72rem;color:#6a1b9a;line-height:1.45;
+  }
 </style>
 </head>
 <body>
@@ -201,6 +273,15 @@
 </header>
 
 <div class="container">
+
+  <!-- Pestañas -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('monitor')">&#128737; Monitor</button>
+    <button class="tab-btn" onclick="switchTab('informes')">&#128196; Informes</button>
+  </div>
+
+  <!-- ═══════════════ TAB MONITOR ═══════════════ -->
+  <div class="tab-panel active" id="tab-monitor">
 
   <!-- Selectores de responsable -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -250,7 +331,67 @@
   <div class="loc-grid" id="grid-cons"></div>
 
   <div class="spacer"></div>
+</div><!-- fin tab-monitor -->
+
+<!-- ═══════════════ TAB INFORMES ═══════════════ -->
+<div class="tab-panel" id="tab-informes">
+<div class="container">
+
+  <!-- Rango horario -->
+  <div class="rango-card" id="rango-txt">&#128336; Cargando rango horario…</div>
+
+  <!-- Info bot IA -->
+  <div class="info-bot">
+    &#129302; <strong>Bot activo:</strong> Envía texto, fotos, videos o links al bot de Telegram y las minutas se generarán automáticamente con IA. Esta lista se actualiza cada 20 segundos.
+  </div>
+
+  <!-- Formulario nueva minuta -->
+  <div class="form-card">
+    <div class="form-title">&#10133; Nueva Minuta</div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Fecha</label>
+        <input type="text" id="m-fecha" placeholder="DD/MM/YYYY">
+      </div>
+      <div class="form-field">
+        <label>Hora</label>
+        <input type="text" id="m-hora" placeholder="HH:MM">
+      </div>
+    </div>
+    <div class="form-field" style="margin-bottom:8px">
+      <label>CPNB</label>
+      <input type="text" id="m-cpnb" placeholder="CPNB-ZULIA" value="CPNB-ZULIA">
+    </div>
+    <div class="form-field" style="margin-bottom:8px">
+      <label>Hecho / Reporte de Redes</label>
+      <textarea id="m-hecho" placeholder="Describe el hecho monitoreado…"></textarea>
+    </div>
+    <div class="form-field" style="margin-bottom:8px">
+      <label>Análisis (opcional)</label>
+      <textarea id="m-analisis" placeholder="Dejar vacío para usar texto predeterminado"></textarea>
+    </div>
+    <div class="form-field" style="margin-bottom:8px">
+      <label>Observación (opcional)</label>
+      <textarea id="m-observacion" placeholder="Dejar vacío para usar texto predeterminado"></textarea>
+    </div>
+    <button class="btn-agregar" onclick="agregarMinuta()">&#10003; Agregar Minuta</button>
+  </div>
+
+  <!-- Lista de minutas -->
+  <div class="minutas-header">
+    <div class="sec-title">&#128203; Minutas guardadas <span class="sec-count" id="cnt-minutas">0</span></div>
+    <button class="btn-clear" onclick="limpiarMinutas()">Limpiar todo</button>
+  </div>
+  <div id="lista-minutas"><p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Sin minutas guardadas</p></div>
+
+  <!-- Generar informe -->
+  <button class="btn-generar" id="btn-generar" onclick="generarInforme()">
+    &#128196; Generar Informe DOCX
+  </button>
+
+  <div class="spacer"></div>
 </div>
+</div><!-- fin tab-informes -->
 
 <!-- Modal foto ampliada -->
 <div class="modal" id="modal" onclick="closeModal()">
@@ -421,6 +562,147 @@ function showToast(msg, type='') {
   t.className = 'toast show ' + type;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.className = 'toast'; }, 3600);
+}
+
+// ─── Tabs ────────────────────────────────────────────────────────
+let informesTimer;
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    if (b.textContent.toLowerCase().includes(name === 'monitor' ? 'monitor' : 'informe'))
+      b.classList.add('active');
+  });
+  clearInterval(informesTimer);
+  if (name === 'informes') {
+    loadMinutas();
+    informesTimer = setInterval(loadMinutas, 20000);
+  }
+}
+
+// ─── Minutas ─────────────────────────────────────────────────────
+async function loadMinutas() {
+  try {
+    const r = await fetch('/api/minutas');
+    const d = await r.json();
+    document.getElementById('rango-txt').textContent = '\u{1F550} Rango: ' + d.rango;
+    renderMinutas(d.minutas);
+    // Pre-llenar fecha/hora Venezuela en el formulario si están vacíos
+    const fEl = document.getElementById('m-fecha');
+    const hEl = document.getElementById('m-hora');
+    if (!fEl.value && d.fecha_ve) fEl.value = d.fecha_ve;
+    if (!hEl.value && d.hora_ve)  hEl.value = d.hora_ve;
+  } catch(e) {
+    showToast('Error cargando minutas', 'err');
+  }
+}
+
+function renderMinutas(minutas) {
+  const el = document.getElementById('lista-minutas');
+  document.getElementById('cnt-minutas').textContent = minutas.length;
+  if (!minutas.length) {
+    el.innerHTML = '<p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Sin minutas guardadas</p>';
+    return;
+  }
+  const ts = Date.now();
+  el.innerHTML = minutas.map((m, i) => {
+    const iaBadge = m.ia ? '<span class="minuta-ia">\u{1F916} IA</span>' : '';
+
+    const mediaHtml = (m.media || []).map(item => {
+      if (item.tipo === 'foto') {
+        return `<img class="minuta-thumb"
+                  src="/api/media-informe/${item.filename}?t=${ts}"
+                  alt="foto"
+                  onclick="openModal('/api/media-informe/${item.filename}')"
+                  onerror="this.style.display='none'">`;
+      }
+      if (item.tipo === 'video') {
+        return `<span class="minuta-video">\u{1F3A5} ${item.filename || 'video'}</span>`;
+      }
+      if (item.tipo === 'link') {
+        return `<a class="minuta-link" href="${item.url}" target="_blank" rel="noopener">\u{1F517} ${item.url}</a>`;
+      }
+      return '';
+    }).join('');
+
+    return `
+      <div class="minuta-item">
+        <div class="minuta-num">${i+1}</div>
+        <div class="minuta-body">
+          <div class="minuta-meta">${m.cpnb || 'CPNB-ZULIA'} &nbsp;|&nbsp; ${m.fecha} &nbsp;|&nbsp; ${m.hora}${iaBadge}</div>
+          <div class="minuta-hecho">${m.hecho}</div>
+          ${mediaHtml ? `<div class="minuta-media">${mediaHtml}</div>` : ''}
+        </div>
+        <button class="minuta-del" onclick="borrarMinuta(${i})" title="Eliminar">&#10005;</button>
+      </div>`;
+  }).join('');
+}
+
+async function agregarMinuta() {
+  const fecha = document.getElementById('m-fecha').value.trim();
+  const hora  = document.getElementById('m-hora').value.trim();
+  const hecho = document.getElementById('m-hecho').value.trim();
+  if (!fecha || !hora || !hecho) { showToast('Fecha, hora y hecho son obligatorios', 'err'); return; }
+
+  try {
+    const r = await fetch('/api/minutas', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        fecha, hora, hecho,
+        cpnb:       document.getElementById('m-cpnb').value.trim() || 'CPNB-ZULIA',
+        analisis:   document.getElementById('m-analisis').value.trim(),
+        observacion:document.getElementById('m-observacion').value.trim(),
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail);
+    // limpiar form (fecha/hora se recargan del servidor en loadMinutas)
+    ['m-fecha','m-hora','m-hecho','m-analisis','m-observacion'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('m-cpnb').value = 'CPNB-ZULIA';
+    await loadMinutas();
+    showToast('Minuta agregada (' + d.total + ' total)', 'ok');
+  } catch(e) { showToast(e.message, 'err'); }
+}
+
+async function borrarMinuta(idx) {
+  try {
+    await fetch('/api/minutas/' + idx, {method:'DELETE'});
+    await loadMinutas();
+  } catch(e) { showToast('Error al borrar', 'err'); }
+}
+
+async function limpiarMinutas() {
+  if (!confirm('¿Borrar todas las minutas?')) return;
+  await fetch('/api/minutas', {method:'DELETE'});
+  await loadMinutas();
+  showToast('Minutas borradas', 'ok');
+}
+
+async function generarInforme() {
+  const btn = document.getElementById('btn-generar');
+  btn.disabled = true;
+  showLoading('Generando informe DOCX…');
+  try {
+    const r = await fetch('/api/generar-informe', {method:'POST'});
+    if (!r.ok) {
+      const d = await r.json();
+      throw new Error(d.detail || 'Error');
+    }
+    const blob = await r.blob();
+    const cd = r.headers.get('content-disposition') || '';
+    const name = cd.match(/filename=(.+)/)?.[1] || 'informe.docx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+    showToast('Informe descargado', 'ok');
+  } catch(e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoading(); btn.disabled = false;
+  }
 }
 
 // ─── Init ────────────────────────────────────────────────────────

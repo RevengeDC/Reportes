@@ -1,37 +1,57 @@
 """
 app.py  --  Servidor web PWA para CPNB-ZULIA
-Requiere:  pip install fastapi uvicorn aiofiles
-Correr:    python app.py
 """
 import json
 import os
 import socket
 import sys
+import threading
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from typing import Optional
 import uvicorn
 
-ROOT = Path(__file__).parent.resolve()
+ROOT         = Path(__file__).parent.resolve()
+_DATA_DIR    = Path(os.environ.get("DATA_DIR", str(ROOT)))
+VENEZUELA_TZ = timezone(timedelta(hours=-4))
 sys.path.insert(0, str(ROOT))
 
-# En Railway: genera config.json desde variables de entorno si no existe
+
+# ── Configuración desde variables de entorno ─────────────────────────────────
+
 def _setup_config_from_env():
     cfg_path = ROOT / "config.json"
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
+    if not os.environ.get("BOT_TOKEN"):
         return
+    cfg = {}
     if cfg_path.is_file():
-        return
-    cfg = {
-        "bot_token":               token,
-        "chat_id_gubernamentales": int(os.environ.get("CHAT_GUB", 0)),
-        "chat_id_consulados":      int(os.environ.get("CHAT_CONS", 0)),
-        "chat_id_reporte":         int(os.environ.get("CHAT_REPORTE", 0)),
-    }
-    cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-    print("config.json generado desde variables de entorno.")
+        try:
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            cfg = {}
+    changed = False
+    for env_var, key, default in [
+        ("BOT_TOKEN",           "bot_token",               ""),
+        ("CHAT_GUB",            "chat_id_gubernamentales",  0),
+        ("CHAT_CONS",           "chat_id_consulados",       0),
+        ("CHAT_REPORTE",        "chat_id_reporte",          0),
+        ("INFORMES_BOT_TOKEN",  "informes_bot_token",       ""),
+        ("GROK_API_KEY",        "grok_api_key",             ""),
+    ]:
+        val = os.environ.get(env_var)
+        if val is not None:
+            new_val = int(val) if isinstance(default, int) else val
+            if cfg.get(key) != new_val:
+                cfg[key] = new_val
+                changed = True
+    if changed:
+        cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        print("config.json actualizado desde variables de entorno.")
+
 
 _setup_config_from_env()
 
@@ -45,22 +65,35 @@ try:
     )
 except SystemExit:
     print("ERROR: faltan dependencias de ppt.py.")
+    sys.exit(1)
+
+from informes import cargar_minutas, guardar_minutas, generar_docx, obtener_rango_horario
 
 # Crear carpetas de datos al arrancar
 CARPETA_GUB.mkdir(parents=True, exist_ok=True)
 CARPETA_CONS.mkdir(parents=True, exist_ok=True)
 (CARPETA_GUB / "sin_clasificar").mkdir(parents=True, exist_ok=True)
 (CARPETA_CONS / "sin_clasificar").mkdir(parents=True, exist_ok=True)
-    print("Ejecuta:  pip install python-pptx requests Pillow")
-    sys.exit(1)
+(_DATA_DIR / "informes_media").mkdir(parents=True, exist_ok=True)
+
+STATIC_DIR        = ROOT / "static"
+INFORMES_MEDIA_DIR = _DATA_DIR / "informes_media"
 
 app = FastAPI(title="CPNB-ZULIA Monitor")
-STATIC_DIR = ROOT / "static"
 
 
-# ---------------------------------------------------------------------------
-# API
-# ---------------------------------------------------------------------------
+@app.on_event("startup")
+def start_informes_bot():
+    try:
+        from bot_informes import run_bot
+        t = threading.Thread(target=run_bot, daemon=True, name="bot-informes")
+        t.start()
+        print("[APP] Bot de informes iniciado en hilo daemon.")
+    except Exception as e:
+        print(f"[APP] Bot de informes no iniciado: {e}")
+
+
+# ── API Monitor ──────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
 def get_status():
@@ -68,35 +101,31 @@ def get_status():
         cargar_config()
     except SystemExit:
         raise HTTPException(503, "Falta config.json en la carpeta del proyecto.")
-
     estado = cargar_estado()
-
     gub = []
     for lugar in LUGARES_GUB:
         foto = buscar_foto_de(lugar["slug"], CARPETA_GUB)
         gub.append({
-            "slug":      lugar["slug"],
-            "nombre":    lugar["nombre"],
-            "coords":    lugar["coords"],
+            "slug":       lugar["slug"],
+            "nombre":     lugar["nombre"],
+            "coords":     lugar["coords"],
             "tiene_foto": foto is not None,
-            "foto_url":  f"/api/foto/gub/{lugar['slug']}" if foto else None,
+            "foto_url":   f"/api/foto/gub/{lugar['slug']}" if foto else None,
         })
-
     cons = []
     for lugar in LUGARES_CONS:
         foto = buscar_foto_de(lugar["slug"], CARPETA_CONS)
         cons.append({
-            "slug":      lugar["slug"],
-            "nombre":    lugar["nombre"],
-            "coords":    lugar["coords"],
+            "slug":       lugar["slug"],
+            "nombre":     lugar["nombre"],
+            "coords":     lugar["coords"],
             "tiene_foto": foto is not None,
-            "foto_url":  f"/api/foto/cons/{lugar['slug']}" if foto else None,
+            "foto_url":   f"/api/foto/cons/{lugar['slug']}" if foto else None,
         })
-
     return {
-        "gubernamentales":  gub,
-        "consulados":       cons,
-        "last_update_id":   estado.get("last_update_id", 0),
+        "gubernamentales": gub,
+        "consulados":      cons,
+        "last_update_id":  estado.get("last_update_id", 0),
     }
 
 
@@ -111,6 +140,16 @@ def get_foto(grupo: str, slug: str):
     return FileResponse(str(foto))
 
 
+@app.get("/api/media-informe/{filename}")
+def get_media_informe(filename: str):
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(400, "nombre inválido")
+    path = INFORMES_MEDIA_DIR / filename
+    if not path.is_file():
+        raise HTTPException(404, "Archivo no encontrado")
+    return FileResponse(str(path))
+
+
 @app.post("/api/actualizar")
 def actualizar_telegram():
     try:
@@ -120,11 +159,7 @@ def actualizar_telegram():
     try:
         estado = cargar_estado()
         sin_clasif, sustituciones = procesar_telegram(config, estado)
-        return {
-            "ok": True,
-            "sin_clasificar": len(sin_clasif),
-            "actualizadas":   len(sustituciones),
-        }
+        return {"ok": True, "sin_clasificar": len(sin_clasif), "actualizadas": len(sustituciones)}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -142,19 +177,13 @@ def enviar_reporte(tipo: str, ci: str = Body(..., embed=True)):
         config = cargar_config()
     except SystemExit:
         raise HTTPException(503, "Falta config.json")
-
-    token = config.get("bot_token", "")
-    if not token or token.startswith("PEGA_"):
-        raise HTTPException(503, "bot_token no configurado en config.json")
-
+    token   = config.get("bot_token", "")
     chat_id = config.get("chat_id_reporte")
-    if not chat_id:
-        raise HTTPException(400, "chat_id_reporte no definido en config.json")
-
+    if not token or not chat_id:
+        raise HTTPException(503, "bot_token o chat_id_reporte no configurado")
     persona = next((p for p in PERSONAS if p["ci"] == ci), None)
     if not persona:
         raise HTTPException(400, f"No se encontró persona con CI {ci}")
-
     fotos = []
     try:
         if tipo == "consulados":
@@ -169,18 +198,81 @@ def enviar_reporte(tipo: str, ci: str = Body(..., embed=True)):
                 if p:
                     fotos.append(str(p))
             texto = texto_reporte_ministerio(persona)
-
         if fotos:
             tg_send_media_group(token, chat_id, fotos, caption=texto)
         else:
             tg_send_message(token, chat_id, texto)
-
         return {"ok": True, "fotos_enviadas": len(fotos)}
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
-# Rutas explícitas para archivos estáticos raíz
+# ── API Minutas / Informes ────────────────────────────────────────────────────
+
+class MinutaIn(BaseModel):
+    fecha: str
+    hora: str
+    hecho: str
+    cpnb: Optional[str] = "CPNB-ZULIA"
+    analisis: Optional[str] = ""
+    observacion: Optional[str] = ""
+
+
+@app.get("/api/minutas")
+def get_minutas():
+    ahora = datetime.now(VENEZUELA_TZ)
+    rango, tipo = obtener_rango_horario()
+    return {
+        "minutas":  cargar_minutas(),
+        "rango":    rango,
+        "tipo":     tipo,
+        "fecha_ve": ahora.strftime("%d/%m/%Y"),
+        "hora_ve":  ahora.strftime("%H:%M"),
+    }
+
+
+@app.post("/api/minutas")
+def add_minuta(m: MinutaIn):
+    minutas = cargar_minutas()
+    minutas.append(m.model_dump())
+    guardar_minutas(minutas)
+    return {"ok": True, "total": len(minutas)}
+
+
+@app.delete("/api/minutas")
+def clear_minutas():
+    guardar_minutas([])
+    return {"ok": True}
+
+
+@app.delete("/api/minutas/{idx}")
+def delete_minuta(idx: int):
+    minutas = cargar_minutas()
+    if idx < 0 or idx >= len(minutas):
+        raise HTTPException(400, "Índice fuera de rango")
+    minutas.pop(idx)
+    guardar_minutas(minutas)
+    return {"ok": True, "total": len(minutas)}
+
+
+@app.post("/api/generar-informe")
+def api_generar_informe():
+    minutas = cargar_minutas()
+    if not minutas:
+        raise HTTPException(400, "No hay minutas guardadas")
+    try:
+        ruta = generar_docx(minutas)
+        return FileResponse(
+            str(ruta),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=ruta.name,
+        )
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ── Archivos estáticos ───────────────────────────────────────────────────────
+
 @app.get("/")
 def root():
     return FileResponse(str(STATIC_DIR / "index.html"))
@@ -193,13 +285,11 @@ def manifest():
 def service_worker():
     return FileResponse(str(STATIC_DIR / "sw.js"))
 
-# Resto de archivos estáticos
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-# ---------------------------------------------------------------------------
-# Arranque
-# ---------------------------------------------------------------------------
+# ── Arranque ─────────────────────────────────────────────────────────────────
+
 def _local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

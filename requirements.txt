@@ -4,3 +4,5 @@ aiofiles
 requests
 Pillow
 python-pptx
+python-docx
+beautifulsoup4
