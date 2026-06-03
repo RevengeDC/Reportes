@@ -216,6 +216,13 @@
   .minutas-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
   .minutas-header .sec-title{margin:0}
   .btn-clear{border:none;background:#b71c1c;color:#fff;font-size:.7rem;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer}
+  .filtros{display:flex;gap:5px}
+  .btn-filter{
+    border:1.5px solid #1a237e;background:#fff;color:#1a237e;
+    font-size:.68rem;font-weight:700;padding:4px 11px;border-radius:7px;cursor:pointer;
+    transition:background .15s,color .15s;
+  }
+  .btn-filter.active{background:#1a237e;color:#fff}
   .minuta-item{background:#fff;border-radius:10px;padding:11px 13px;margin-bottom:7px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;gap:10px;align-items:flex-start}
   .minuta-num{width:26px;height:26px;border-radius:50%;background:#1a237e;color:#fff;font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
   .minuta-body{flex:1;min-width:0}
@@ -379,8 +386,14 @@
 
   <!-- Lista de minutas -->
   <div class="minutas-header">
-    <div class="sec-title">&#128203; Minutas guardadas <span class="sec-count" id="cnt-minutas">0</span></div>
-    <button class="btn-clear" onclick="limpiarMinutas()">Limpiar todo</button>
+    <div class="sec-title">&#128203; Minutas <span class="sec-count" id="cnt-minutas">0</span></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="filtros">
+        <button class="btn-filter active" id="btn-f-hoy"   onclick="setFiltro('hoy')">Hoy</button>
+        <button class="btn-filter"        id="btn-f-todas" onclick="setFiltro('todas')">Todas</button>
+      </div>
+      <button class="btn-clear" onclick="limpiarMinutas()">Limpiar</button>
+    </div>
   </div>
   <div id="lista-minutas"><p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Sin minutas guardadas</p></div>
 
@@ -582,17 +595,37 @@ function switchTab(name) {
 }
 
 // ─── Minutas ─────────────────────────────────────────────────────
+let _todasMinutas = [];
+let _fechaVe      = '';
+let _filtroHoy    = true;
+
+function setFiltro(tipo) {
+  _filtroHoy = (tipo === 'hoy');
+  document.getElementById('btn-f-hoy').classList.toggle('active', _filtroHoy);
+  document.getElementById('btn-f-todas').classList.toggle('active', !_filtroHoy);
+  _aplicarFiltro();
+}
+
+function _aplicarFiltro() {
+  const lista = _filtroHoy
+    ? _todasMinutas.filter(m => m.fecha === _fechaVe)
+    : _todasMinutas;
+  renderMinutas(lista);
+}
+
 async function loadMinutas() {
   try {
     const r = await fetch('/api/minutas');
     const d = await r.json();
+    _todasMinutas = d.minutas || [];
+    _fechaVe      = d.fecha_ve || '';
     document.getElementById('rango-txt').textContent = '\u{1F550} Rango: ' + d.rango;
-    renderMinutas(d.minutas);
     // Pre-llenar fecha/hora Venezuela en el formulario si están vacíos
     const fEl = document.getElementById('m-fecha');
     const hEl = document.getElementById('m-hora');
     if (!fEl.value && d.fecha_ve) fEl.value = d.fecha_ve;
     if (!hEl.value && d.hora_ve)  hEl.value = d.hora_ve;
+    _aplicarFiltro();
   } catch(e) {
     showToast('Error cargando minutas', 'err');
   }
