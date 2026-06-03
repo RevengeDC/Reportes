@@ -256,11 +256,23 @@ def delete_minuta(idx: int):
     return {"ok": True, "total": len(minutas)}
 
 
-@app.post("/api/escanear-grupo")
-def escanear_grupo():
+@app.get("/api/fechas-log")
+def get_fechas_log():
     try:
-        from bot_informes import escanear_grupo as _scan
-        importadas = _scan()
+        from bot_informes import fechas_en_log
+        return {"fechas": fechas_en_log()}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/escanear-grupo")
+def escanear_grupo_api(fecha: Optional[str] = Body(None, embed=True)):
+    try:
+        from bot_informes import escanear_grupo, escanear_desde_log
+        if fecha:
+            importadas = escanear_desde_log(fecha)
+        else:
+            importadas = escanear_grupo()
         return {"ok": True, "importadas": importadas}
     except Exception as e:
         raise HTTPException(500, str(e))

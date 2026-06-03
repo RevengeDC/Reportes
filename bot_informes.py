@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 _DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve()))
 MEDIA_DIR    = _DATA / "informes_media"
 OFFSET_FILE  = _DATA / "informes_offset.json"
+LOG_FILE     = _DATA / "mensajes_log.jsonl"   # registro permanente de mensajes
 VENEZUELA_TZ = timezone(timedelta(hours=-4))
 
 
@@ -292,6 +293,30 @@ def _save_offset(v):
     OFFSET_FILE.write_text(str(v))
 
 
+def _log_mensaje(msg, update_id=0):
+    """Persiste el mensaje raw en mensajes_log.jsonl para reimportación futura."""
+    texto = msg.get("text") or msg.get("caption") or ""
+    fecha_ve, hora_ve = parsear_formato_cpnb(texto)
+    ahora = datetime.now(VENEZUELA_TZ)
+    if not fecha_ve:
+        fecha_ve = ahora.strftime("%d/%m/%Y")
+    if not hora_ve:
+        hora_ve = ahora.strftime("%H:%M")
+    entrada = {
+        "update_id": update_id,
+        "fecha_ve":  fecha_ve,
+        "hora_ve":   hora_ve,
+        "texto":     texto[:120],
+        "raw":       msg,
+    }
+    try:
+        _DATA.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entrada, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"[BOT-INFORMES] Error escribiendo log: {e}")
+
+
 # ── Procesamiento de mensajes ────────────────────────────────────────────────
 
 def _texto_duplicado(texto):
@@ -438,6 +463,7 @@ def escanear_grupo():
             for upd in updates:
                 msg = upd.get("message") or upd.get("channel_post")
                 if msg:
+                    _log_mensaje(msg, upd["update_id"])   # registro permanente
                     texto = (msg.get("text") or msg.get("caption") or "").strip()
                     tiene_media = "photo" in msg or "video" in msg or "document" in msg
                     if texto or tiene_media:
@@ -454,6 +480,74 @@ def escanear_grupo():
             break
 
     print(f"[BOT-INFORMES] Escaneo terminado. {importadas} minuta(s) nueva(s).")
+    return importadas
+
+
+# ── Reimportación desde log persistente ─────────────────────────────────────
+
+def fechas_en_log():
+    """Devuelve lista de fechas únicas presentes en el log (más reciente primero)."""
+    if not LOG_FILE.is_file():
+        return []
+    fechas = set()
+    try:
+        with LOG_FILE.open(encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    entrada = json.loads(linea)
+                    fv = entrada.get("fecha_ve")
+                    if fv:
+                        fechas.add(fv)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return sorted(fechas, reverse=True)
+
+
+def escanear_desde_log(fecha=None):
+    """
+    Reimporta mensajes del log persistente.
+    Si fecha='dd/mm/yyyy' filtra por ese día; si fecha=None importa todos.
+    Retorna número de minutas nuevas generadas.
+    """
+    if not LOG_FILE.is_file():
+        return 0
+
+    token = get_bot_token()
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+
+    from informes import cargar_minutas
+    existentes = {m.get("texto_original", "").strip() for m in cargar_minutas() if m.get("texto_original")}
+
+    importadas = 0
+    print(f"[BOT-INFORMES] Reimportando desde log{f' ({fecha})' if fecha else ''}…")
+    try:
+        with LOG_FILE.open(encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    entrada = json.loads(linea)
+                    if fecha and entrada.get("fecha_ve") != fecha:
+                        continue
+                    msg   = entrada.get("raw", {})
+                    texto = (msg.get("text") or msg.get("caption") or "").strip()
+                    tiene_media = "photo" in msg or "video" in msg or "document" in msg
+                    if (texto or tiene_media) and texto not in existentes:
+                        procesar_mensaje(token, msg)
+                        existentes.add(texto)
+                        importadas += 1
+                except Exception as e:
+                    print(f"[BOT-INFORMES] Error log entry: {e}")
+    except Exception as e:
+        print(f"[BOT-INFORMES] Error leyendo log: {e}")
+
+    print(f"[BOT-INFORMES] Log: {importadas} minuta(s) nueva(s) importada(s).")
     return importadas
 
 
@@ -475,6 +569,7 @@ def run_bot():
             for upd in result.get("result", []):
                 msg = upd.get("message") or upd.get("channel_post")
                 if msg:
+                    _log_mensaje(msg, upd["update_id"])   # registro permanente
                     try:
                         procesar_mensaje(token, msg)
                     except Exception as e:

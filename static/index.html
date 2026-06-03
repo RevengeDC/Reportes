@@ -406,9 +406,17 @@
   <div id="lista-minutas"><p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Sin minutas guardadas</p></div>
 
   <!-- Importar del grupo -->
-  <button class="btn-importar" id="btn-importar" onclick="escanearGrupo()">
-    &#128229; Importar minutas del grupo
-  </button>
+  <div class="form-card" style="padding:12px 14px;margin-bottom:8px">
+    <div class="form-title" style="margin-bottom:8px">&#128229; Importar minutas del grupo</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="sel-fecha-log" style="flex:1;border:1.5px solid #c5cae9;border-radius:8px;padding:8px 10px;font-size:.78rem;font-family:inherit;color:#1a1a2e">
+        <option value="">Pendientes nuevas</option>
+      </select>
+      <button class="btn-importar" id="btn-importar" onclick="escanearGrupo()" style="width:auto;padding:9px 16px;margin:0;font-size:.78rem">
+        &#128229; Importar
+      </button>
+    </div>
+  </div>
 
   <!-- Generar informe -->
   <button class="btn-generar" id="btn-generar" onclick="generarInforme()">
@@ -603,6 +611,7 @@ function switchTab(name) {
   clearInterval(informesTimer);
   if (name === 'informes') {
     loadMinutas();
+    cargarFechasLog();
     informesTimer = setInterval(loadMinutas, 20000);
   }
 }
@@ -726,20 +735,46 @@ async function limpiarMinutas() {
   showToast('Minutas borradas', 'ok');
 }
 
-async function escanearGrupo() {
-  const btn = document.getElementById('btn-importar');
-  btn.disabled = true;
-  btn.innerHTML = '&#9203; Escaneando grupo…';
-  showLoading('Importando minutas del grupo…');
+async function cargarFechasLog() {
   try {
-    const r = await fetch('/api/escanear-grupo', {method: 'POST'});
+    const r = await fetch('/api/fechas-log');
+    const d = await r.json();
+    const sel = document.getElementById('sel-fecha-log');
+    const primero = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(primero);
+    (d.fechas || []).forEach(fecha => {
+      const opt = document.createElement('option');
+      opt.value = fecha;
+      // Marcar "Ayer" para la fecha anterior
+      const hoy  = _fechaVe;
+      opt.textContent = fecha + (fecha === hoy ? ' (hoy)' : '');
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+async function escanearGrupo() {
+  const btn   = document.getElementById('btn-importar');
+  const fecha = document.getElementById('sel-fecha-log').value;
+  btn.disabled = true;
+  const label = fecha ? `Importando ${fecha}…` : 'Importando pendientes…';
+  showLoading(label);
+  try {
+    const body = fecha ? JSON.stringify({fecha}) : JSON.stringify({});
+    const r = await fetch('/api/escanear-grupo', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body,
+    });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Error');
     await loadMinutas();
+    await cargarFechasLog();
     showToast(
       d.importadas > 0
-        ? d.importadas + ' minuta(s) importada(s) del grupo'
-        : 'Sin minutas nuevas en el grupo',
+        ? d.importadas + ' minuta(s) importada(s)'
+        : 'Sin minutas nuevas',
       d.importadas > 0 ? 'ok' : ''
     );
   } catch(e) {
@@ -747,7 +782,6 @@ async function escanearGrupo() {
   } finally {
     hideLoading();
     btn.disabled = false;
-    btn.innerHTML = '&#128229; Importar minutas del grupo';
   }
 }
 
