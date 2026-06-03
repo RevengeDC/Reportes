@@ -45,6 +45,12 @@ try:
     )
 except SystemExit:
     print("ERROR: faltan dependencias de ppt.py.")
+
+# Crear carpetas de datos al arrancar
+CARPETA_GUB.mkdir(parents=True, exist_ok=True)
+CARPETA_CONS.mkdir(parents=True, exist_ok=True)
+(CARPETA_GUB / "sin_clasificar").mkdir(parents=True, exist_ok=True)
+(CARPETA_CONS / "sin_clasificar").mkdir(parents=True, exist_ok=True)
     print("Ejecuta:  pip install python-pptx requests Pillow")
     sys.exit(1)
 
