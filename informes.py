@@ -145,9 +145,47 @@ def _header_oscuro(doc, texto, color="1F2D6E"):
 
 
 def _agregar_minuta(doc, m):
-    """Agrega un bloque de minuta en formato CPNB estándar."""
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    """Formato simple para INFORME ESPECIAL: FECHA, HORA, HECHO, ANALISIS, OBSERVACION, 1 foto."""
+    from docx.shared import Inches
+
+    doc.add_paragraph(f"FECHA: {m.get('fecha', '')}")
+    doc.add_paragraph(f"HORA: {m.get('hora', '')}")
+    doc.add_paragraph()
+
+    p = doc.add_paragraph()
+    p.add_run("HECHO").bold = True
+    doc.add_paragraph(m.get("hecho", ""))
+
+    analisis = m.get("analisis") or "\n".join(ANALISIS_TEXTOS)
+    p = doc.add_paragraph()
+    p.add_run("ANALISIS:").bold = True
+    for linea in analisis.split("\n"):
+        if linea.strip():
+            doc.add_paragraph(linea.strip())
+
+    obs = m.get("observacion") or "\n".join(OBSERVACION_TEXTOS)
+    p = doc.add_paragraph()
+    p.add_run("OBSERVACION:").bold = True
+    for linea in obs.split("\n"):
+        if linea.strip():
+            doc.add_paragraph(linea.strip())
+
+    # Solo la PRIMERA foto disponible (nunca URLs en el documento)
+    fotos = [x for x in m.get("media", []) if x.get("tipo") == "foto"]
+    if fotos:
+        fp = Path(fotos[0].get("path", ""))
+        if fp.is_file():
+            try:
+                doc.add_picture(str(fp), width=Inches(5.5))
+            except Exception:
+                pass
+
+    doc.add_paragraph()
+
+
+def _agregar_minuta_completa(doc, m):
+    """Formato completo para SITUACIÓN OPERATIVA: incluye LUGAR, FUENTE, INCIDENCIA."""
+    from docx.shared import Inches
 
     hora = m.get("hora", "")
     if hora and "HRS" not in hora.upper():
@@ -187,22 +225,15 @@ def _agregar_minuta(doc, m):
     p.add_run("OBSERVACIÓN: ").bold = True
     p.add_run(obs)
 
-    # Fotos adjuntas
+    # Primera foto disponible
     fotos = [x for x in m.get("media", []) if x.get("tipo") == "foto"]
     if fotos:
-        doc.add_paragraph()
-        for foto in fotos:
-            fp = Path(foto.get("path", ""))
-            if fp.is_file():
-                try:
-                    doc.add_picture(str(fp), width=Inches(5.5))
-                except Exception:
-                    doc.add_paragraph(f"[Imagen: {foto.get('filename', '')}]")
-
-    # Links
-    links = [x for x in m.get("media", []) if x.get("tipo") == "link"]
-    for lnk in links:
-        doc.add_paragraph(f"FUENTE WEB: {lnk.get('url', '')}")
+        fp = Path(fotos[0].get("path", ""))
+        if fp.is_file():
+            try:
+                doc.add_picture(str(fp), width=Inches(5.5))
+            except Exception:
+                pass
 
     doc.add_paragraph()
 
