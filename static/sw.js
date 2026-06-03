@@ -1,4 +1,4 @@
-const CACHE = 'cpnb-v1';
+const CACHE = 'cpnb-v3';
 const PRECACHE = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -20,13 +20,13 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // API y fotos: siempre red (sin cache)
-  if (url.includes('/api/')) {
+  // API, fotos y HTML principal: siempre red (nunca cache)
+  if (url.includes('/api/') || url.endsWith('/') || url.includes('index.html')) {
     e.respondWith(fetch(e.request));
     return;
   }
 
-  // Recursos estáticos: cache primero
+  // Recursos estáticos (css, js, iconos): cache primero
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
