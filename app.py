@@ -44,7 +44,8 @@ def _setup_config_from_env():
     ]:
         val = os.environ.get(env_var)
         if val is not None:
-            new_val = int(val) if isinstance(default, int) else val
+            val = val.strip()
+            new_val = int(val) if isinstance(default, int) and val else (val or default)
             if cfg.get(key) != new_val:
                 cfg[key] = new_val
                 changed = True
