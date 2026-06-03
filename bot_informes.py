@@ -29,11 +29,13 @@ def _cfg():
 
 
 def get_bot_token():
-    return os.environ.get("INFORMES_BOT_TOKEN") or _cfg().get("informes_bot_token", "")
+    v = os.environ.get("INFORMES_BOT_TOKEN") or _cfg().get("informes_bot_token", "")
+    return v.strip()
 
 
 def get_grok_key():
-    return os.environ.get("GROK_API_KEY") or _cfg().get("grok_api_key", "")
+    v = os.environ.get("GROK_API_KEY") or _cfg().get("grok_api_key", "")
+    return v.strip()
 
 
 # ── Telegram helpers ─────────────────────────────────────────────────────────
