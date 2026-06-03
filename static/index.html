@@ -473,6 +473,15 @@
     <p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Cargando minutas…</p>
   </div>
 
+  <!-- Homicidios -->
+  <div class="form-card" style="padding:11px 14px;margin-bottom:8px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <label style="font-size:.72rem;font-weight:700;color:#555;white-space:nowrap">HOMICIDIOS:</label>
+      <input type="number" id="sit-homicidios" value="0" min="0" max="99"
+        style="width:70px;border:1.5px solid #c5cae9;border-radius:8px;padding:7px 10px;font-size:.9rem;font-family:inherit;color:#1a1a2e">
+    </div>
+  </div>
+
   <button class="btn-generar" id="btn-sit-generar" onclick="generarSituacion()" style="background:linear-gradient(135deg,#0d47a1,#1565c0)">
     &#128202; Generar Informe Situación Operativa
   </button>
@@ -950,10 +959,11 @@ async function generarSituacion() {
   btn.disabled = true;
   showLoading('Generando Informe Situación Operativa…');
   try {
+    const homicidios = parseInt(document.getElementById('sit-homicidios').value) || 0;
     const r = await fetch('/api/generar-situacion', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({asignaciones: _asignaciones}),
+      body: JSON.stringify({asignaciones: _asignaciones, homicidios}),
     });
     if (!r.ok) {
       const d = await r.json();

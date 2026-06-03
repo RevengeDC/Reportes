@@ -70,7 +70,7 @@ except SystemExit:
 
 from informes import (
     cargar_minutas, guardar_minutas, generar_docx, obtener_rango_horario,
-    RENGLONES_SITUACION, generar_docx_situacion,
+    RENGLONES_SITUACION, EDS_MARACAIBO, generar_docx_situacion,
 )
 
 # Crear carpetas de datos al arrancar
@@ -283,11 +283,16 @@ def escanear_grupo_api(fecha: Optional[str] = Body(None, embed=True)):
 
 @app.get("/api/renglones")
 def get_renglones():
-    return {"renglones": RENGLONES_SITUACION}
+    return {
+        "renglones": RENGLONES_SITUACION + ["ACCIDENTES DE TRÁNSITO"],
+        "eds": EDS_MARACAIBO,
+    }
 
 
 class SituacionIn(BaseModel):
-    asignaciones: dict   # {"0": "ÁMBITO SOCIAL", "3": "SEGURIDAD CIUDADANA", ...}
+    asignaciones: dict            # {"0": "MONITOREO", "3": "SUCESOS", ...}
+    homicidios: Optional[int] = 0
+    eds_estado: Optional[dict] = None  # {"E/S MILAGROS": "NO FUNCIONANDO", ...}
 
 
 @app.post("/api/generar-situacion")
@@ -296,7 +301,10 @@ def api_generar_situacion(data: SituacionIn):
     if not any(v for v in data.asignaciones.values()):
         raise HTTPException(400, "Asigna al menos una minuta a un renglón")
     try:
-        ruta = generar_docx_situacion(minutas, data.asignaciones)
+        eds = {eds: "FUNCIONANDO" for eds in EDS_MARACAIBO}
+        if data.eds_estado:
+            eds.update(data.eds_estado)
+        ruta = generar_docx_situacion(minutas, data.asignaciones, data.homicidios or 0, eds)
         return FileResponse(
             str(ruta),
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

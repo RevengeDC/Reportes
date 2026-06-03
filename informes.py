@@ -11,22 +11,53 @@ _DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve()))
 MINUTAS_FILE = _DATA / "minutas.json"
 VENEZUELA_TZ = timezone(timedelta(hours=-4))
 
+OBSERVACION_DEFAULT = (
+    "La información fue notificada a la digna superioridad en tiempo real "
+    "para su conocimiento, evaluación y fines consiguientes."
+)
+
+INTRO_INFORMACION_INICIAL = (
+    "Mediante monitoreo a través del patrullaje cibernético, por diversos portales de "
+    "información web y redes sociales, a los fines de identificar informaciones de interés "
+    "operativo, relacionado al campo de la inteligencia y contrainteligencia, con el fin de "
+    "informar para recomendar acciones o su efecto informar para neutralizar alguna célula u "
+    "organización que pretendan integrar alguna inteligencia regional, que busque sustraer y "
+    "suministrar información en contra del gobierno bolivariano, las fuerzas de seguridad "
+    "venezolanas y los sectores populares, todo esto con el objetivo de causar malestar en la "
+    "población, para volver a generar un clima de protestas."
+)
+
+EDS_MARACAIBO = [
+    "E/S SERVICIOS POPULARES",
+    "E/S AUTOMOTRIZ",
+    "E/S MILAGROS",
+    "E/S CALZADA",
+    "E/S PICHINCHA",
+    "E/S NIGALE",
+    "E/S CARMEN",
+    "E/S DELICIAS",
+]
+
 ANALISIS_TEXTOS = [
     "La información difundida en redes sociales representa un monitoreo continuo de eventos relevantes en el estado Zulia, permitiendo evaluar dinámicas sociales, políticas e institucionales.",
     "Este reporte contribuye a la comprensión del panorama informativo y el impacto de las acciones institucionales en la opinión pública.",
     "El análisis de contenidos en plataformas digitales permite identificar tendencias, evaluar alcance de mensajes y respuestas ciudadanas.",
 ]
 
-OBSERVACION_TEXTOS = [
-    "Se recomienda continuar con el monitoreo permanente de redes sociales y fuentes informativas para mantener actualizado el panorama situacional del estado.",
-    "Es importante mantener vigilancia sobre la evolución de estos eventos y su potencial impacto en la dinámica social de la región.",
+RENGLONES_SITUACION = [
+    "POLÍTICO",
+    "MONITOREO",
+    "DEPORTE",
+    "ECONÓMICO",
+    "AMBIENTAL",
+    "SUCESOS",
 ]
 
 MESES = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO",
          "JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"]
 
-MESES_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-            "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+MESES_TITULO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+                "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
 
 
 # ── Persistencia de minutas ──────────────────────────────────────────────────
@@ -48,12 +79,19 @@ def guardar_minutas(minutas):
         json.dump(minutas, f, ensure_ascii=False, indent=2)
 
 
-# ── Fechas y rangos (hora Venezuela UTC-4) ───────────────────────────────────
+# ── Fechas (hora Venezuela UTC-4) ────────────────────────────────────────────
 
 def obtener_fecha_formato(fecha=None):
     if fecha is None:
         fecha = datetime.now(VENEZUELA_TZ)
     return f"{fecha.day} DE {MESES[fecha.month - 1]} {fecha.year}"
+
+
+def obtener_fecha_titulo(fecha=None):
+    """Formato: 03 De Junio año 2026"""
+    if fecha is None:
+        fecha = datetime.now(VENEZUELA_TZ)
+    return f"{str(fecha.day).zfill(2)} De {MESES_TITULO[fecha.month - 1]} año {fecha.year}"
 
 
 def obtener_rango_horario():
@@ -74,136 +112,109 @@ def obtener_rango_horario():
 
 def nombre_archivo_informe():
     hoy = datetime.now(VENEZUELA_TZ)
-    return f"INFORME_0800HRS_ENTORNO_ZULIA_{str(hoy.day).zfill(2)}{str(hoy.month).zfill(2)}{hoy.year}.docx"
+    return f"INFORME_{hoy.strftime('%H')}00HRS_ENTORNO_ZULIA_{str(hoy.day).zfill(2)}{str(hoy.month).zfill(2)}{hoy.year}.docx"
 
 
-RENGLONES_SITUACION = [
-    "POLÍTICO",
-    "MONITOREO",
-    "DEPORTE",
-    "ECONÓMICO",
-    "AMBIENTAL",
-    "SUCESOS",
-]
+def nombre_archivo_situacion():
+    hoy = datetime.now(VENEZUELA_TZ)
+    return f"INFORME_SITUACION_OPERATIVA_{str(hoy.day).zfill(2)}{str(hoy.month).zfill(2)}{hoy.year}.docx"
 
 
-# ── Generación del DOCX ──────────────────────────────────────────────────────
+# ── Helpers DOCX ─────────────────────────────────────────────────────────────
+
+def _header_oscuro(doc, texto, color="1F2D6E"):
+    """Párrafo con fondo oscuro y texto blanco."""
+    from docx.shared import Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pPr = p._p.get_or_add_pPr()
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), color)
+    pPr.append(shd)
+    run = p.add_run(texto)
+    run.bold = True
+    run.font.color.rgb = RGBColor(255, 255, 255)
+    run.font.size = Pt(11)
+    return p
+
+
+def _agregar_minuta(doc, m):
+    """Agrega un bloque de minuta en formato CPNB estándar."""
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    hora = m.get("hora", "")
+    if hora and "HRS" not in hora.upper():
+        hora = hora + " HRS"
+
+    doc.add_paragraph(f"FECHA: {m.get('fecha', '')}")
+    doc.add_paragraph(f"HORA: {hora}")
+
+    lugar = m.get("lugar", "Estado Zulia")
+    doc.add_paragraph(f"LUGAR: {lugar}.")
+
+    fuente = m.get("fuente", "")
+    if fuente:
+        doc.add_paragraph(f"FUENTE: {fuente}.")
+
+    incidencia = m.get("incidencia", "")
+    if incidencia:
+        doc.add_paragraph(f"INCIDENCIA: {incidencia}.")
+
+    doc.add_paragraph()
+
+    p = doc.add_paragraph()
+    p.add_run("HECHO: ").bold = True
+    p.add_run(m.get("hecho", ""))
+
+    doc.add_paragraph()
+
+    analisis = m.get("analisis") or "\n".join(ANALISIS_TEXTOS)
+    p = doc.add_paragraph()
+    p.add_run("ANÁLISIS: ").bold = True
+    p.add_run(analisis)
+
+    doc.add_paragraph()
+
+    obs = m.get("observacion") or OBSERVACION_DEFAULT
+    p = doc.add_paragraph()
+    p.add_run("OBSERVACIÓN: ").bold = True
+    p.add_run(obs)
+
+    # Fotos adjuntas
+    fotos = [x for x in m.get("media", []) if x.get("tipo") == "foto"]
+    if fotos:
+        doc.add_paragraph()
+        for foto in fotos:
+            fp = Path(foto.get("path", ""))
+            if fp.is_file():
+                try:
+                    doc.add_picture(str(fp), width=Inches(5.5))
+                except Exception:
+                    doc.add_paragraph(f"[Imagen: {foto.get('filename', '')}]")
+
+    # Links
+    links = [x for x in m.get("media", []) if x.get("tipo") == "link"]
+    for lnk in links:
+        doc.add_paragraph(f"FUENTE WEB: {lnk.get('url', '')}")
+
+    doc.add_paragraph()
+
+
+# ── Informe Especial ─────────────────────────────────────────────────────────
 
 def generar_docx(minutas):
     from docx import Document
     from docx.shared import Pt, RGBColor, Inches
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
 
     ahora = datetime.now(VENEZUELA_TZ)
-
-    doc = Document()
-    for sec in doc.sections:
-        sec.top_margin    = Inches(1)
-        sec.bottom_margin = Inches(1)
-        sec.left_margin   = Inches(1)
-        sec.right_margin  = Inches(1)
-
-    # CONFIDENCIAL
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("CONFIDENCIAL")
-    r.bold = True; r.font.size = Pt(16); r.font.color.rgb = RGBColor(204, 0, 0)
-
-    # TÍTULO
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("INFORME ESPECIAL")
-    r.bold = True; r.font.size = Pt(14)
-
-    doc.add_paragraph(f"FECHA: {obtener_fecha_formato(ahora)}")
-    doc.add_paragraph("LUGAR: Estado ZULIA")
-    doc.add_paragraph("ASUNTO: Monitoreo")
-
-    p = doc.add_paragraph()
-    p.add_run("Ámbito Social").bold = True
-
-    for idx, m in enumerate(minutas):
-        p = doc.add_paragraph()
-        p.add_run(m.get("cpnb", "CPNB-ZULIA")).bold = True
-
-        doc.add_paragraph(f"FECHA: {m.get('fecha', '')}")
-        doc.add_paragraph(f"HORA: {m.get('hora', '')}")
-        doc.add_paragraph("")
-
-        p = doc.add_paragraph()
-        p.add_run("REPORTE DE REDES").bold = True
-        doc.add_paragraph(m.get("hecho", ""))
-
-        p = doc.add_paragraph()
-        p.add_run("ANALISIS:").bold = True
-        for linea in (m.get("analisis") or "\n".join(ANALISIS_TEXTOS)).split("\n"):
-            if linea.strip():
-                doc.add_paragraph(linea.strip())
-
-        p = doc.add_paragraph()
-        p.add_run("OBSERVACION:").bold = True
-        for linea in (m.get("observacion") or "\n".join(OBSERVACION_TEXTOS)).split("\n"):
-            if linea.strip():
-                doc.add_paragraph(linea.strip())
-
-        # Fotografías adjuntas
-        fotos = [x for x in m.get("media", []) if x.get("tipo") == "foto"]
-        if fotos:
-            p = doc.add_paragraph()
-            p.add_run("EVIDENCIA FOTOGRÁFICA:").bold = True
-            for foto in fotos:
-                path = Path(foto.get("path", ""))
-                if path.is_file():
-                    try:
-                        doc.add_picture(str(path), width=Inches(5.5))
-                    except Exception:
-                        doc.add_paragraph(f"[Imagen: {foto.get('filename', 'foto')}]")
-                else:
-                    doc.add_paragraph(f"[Imagen no disponible: {foto.get('filename', '')}]")
-
-        # Videos y enlaces
-        otros = [x for x in m.get("media", []) if x.get("tipo") in ("video", "link")]
-        if otros:
-            p = doc.add_paragraph()
-            p.add_run("REFERENCIAS:").bold = True
-            for item in otros:
-                if item["tipo"] == "video":
-                    doc.add_paragraph(f"VIDEO: {item.get('filename', 'archivo de video')}")
-                elif item["tipo"] == "link":
-                    doc.add_paragraph(f"ENLACE: {item.get('url', '')}")
-
-        if idx < len(minutas) - 1:
-            doc.add_paragraph()
-
-    # Electricidad
-    doc.add_paragraph()
-    p = doc.add_paragraph()
-    p.add_run("Electricidad:").bold = True
-    doc.add_paragraph(
-        "En el estado Zulia, se reporta que la capacidad operativa del sistema eléctrico se mantiene en un 60%, "
-        "lo que indica un nivel de funcionamiento estable pero todavía por debajo de la plena capacidad; esta "
-        "condición requiere monitoreo constante para prevenir interrupciones y garantizar la continuidad del "
-        "suministro tanto a nivel residencial como industrial."
-    )
-
-    ruta = _DATA / nombre_archivo_informe()
-    doc.save(str(ruta))
-    return ruta
-
-
-def generar_docx_situacion(minutas, asignaciones):
-    """
-    Genera el Informe de Situación Operativa agrupando minutas por renglón.
-    asignaciones: dict {str(idx) -> nombre_renglón}
-    """
-    from docx import Document
-    from docx.shared import Pt, RGBColor, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-
-    ahora = datetime.now(VENEZUELA_TZ)
-    rango, _ = obtener_rango_horario()
 
     doc = Document()
     for sec in doc.sections:
@@ -215,86 +226,186 @@ def generar_docx_situacion(minutas, asignaciones):
     r = p.add_run("CONFIDENCIAL")
     r.bold = True; r.font.size = Pt(16); r.font.color.rgb = RGBColor(204, 0, 0)
 
-    # TÍTULO
+    # INFORME ESPECIAL
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("INFORME DE SITUACIÓN OPERATIVA")
+    r = p.add_run("INFORME ESPECIAL")
     r.bold = True; r.font.size = Pt(14)
 
-    doc.add_paragraph(f"FECHA: {obtener_fecha_formato(ahora)}")
+    doc.add_paragraph(f"FECHA: {obtener_fecha_formato(ahora)} {ahora.strftime('%H:%M')}HRS")
     doc.add_paragraph("LUGAR: Estado ZULIA")
-    doc.add_paragraph(f"PERIODO: {rango}")
+    doc.add_paragraph("ASUNTO: Monitoreo")
     doc.add_paragraph()
 
-    # Agrupar minutas por renglón respetando orden de RENGLONES_SITUACION
+    p = doc.add_paragraph()
+    p.add_run("Ámbito Social").bold = True
+
+    for m in minutas:
+        _agregar_minuta(doc, m)
+
+    # Electricidad
+    p = doc.add_paragraph()
+    p.add_run("Electricidad:").bold = True
+    doc.add_paragraph(
+        "En el estado Zulia, se reporta que la capacidad operativa del sistema eléctrico "
+        "se mantiene en un 60%, lo que indica un nivel de funcionamiento estable pero todavía "
+        "por debajo de la plena capacidad; esta condición requiere monitoreo constante para "
+        "prevenir interrupciones y garantizar la continuidad del suministro tanto a nivel "
+        "residencial como industrial, especialmente en sectores críticos que dependen del "
+        "servicio eléctrico para su operatividad diaria."
+    )
+
+    ruta = _DATA / nombre_archivo_informe()
+    doc.save(str(ruta))
+    return ruta
+
+
+# ── Informe de Situación Operativa ───────────────────────────────────────────
+
+def generar_docx_situacion(minutas, asignaciones, homicidios=0, eds_estado=None):
+    """
+    Genera el Informe de Situación Operativa.
+    asignaciones: {str(idx) -> renglón}
+    homicidios: entero
+    eds_estado: dict {nombre_eds: "FUNCIONANDO"|"NO FUNCIONANDO"} o None para todos FUNCIONANDO
+    """
+    from docx import Document
+    from docx.shared import Pt, RGBColor, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    ahora  = datetime.now(VENEZUELA_TZ)
+    rango, _ = obtener_rango_horario()
+
+    if eds_estado is None:
+        eds_estado = {eds: "FUNCIONANDO" for eds in EDS_MARACAIBO}
+
+    doc = Document()
+    for sec in doc.sections:
+        sec.top_margin = sec.bottom_margin = sec.left_margin = sec.right_margin = Inches(1)
+
+    # ── Encabezado principal ──────────────────────────────────────────────
+    _header_oscuro(doc, "INFORME DE INTELIGENCIA", "000000")
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run("DIVISIÓN DE INTELIGENCIA ESTRATÉGICA ZULIA")
+    r.bold = True; r.font.size = Pt(12)
+
+    p = doc.add_paragraph()
+    p.add_run("Asunto: ").bold = True
+    p.add_run("Secreto")
+
+    p = doc.add_paragraph()
+    p.add_run("Fecha: ").bold = True
+    p.add_run(obtener_fecha_titulo(ahora))
+
+    doc.add_paragraph()
+
+    # ── INFORMACIÓN INICIAL ───────────────────────────────────────────────
+    _header_oscuro(doc, ":     INFORMACIÓN INICIAL")
+    doc.add_paragraph()
+
+    p = doc.add_paragraph()
+    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    p.add_run(INTRO_INFORMACION_INICIAL)
+
+    doc.add_paragraph()
+
+    # ── BÚSQUEDA Y ────────────────────────────────────────────────────────
+    _header_oscuro(doc, "BÚSQUEDA Y")
+    doc.add_paragraph()
+
+    # Agrupar minutas por renglón
     grupos = {}
+    accidentes = []
     for idx_str, renglon in asignaciones.items():
         if not renglon:
             continue
         try:
             idx = int(idx_str)
             if 0 <= idx < len(minutas):
-                grupos.setdefault(renglon, []).append(minutas[idx])
+                if renglon == "ACCIDENTES DE TRÁNSITO":
+                    accidentes.append(minutas[idx])
+                else:
+                    grupos.setdefault(renglon, []).append(minutas[idx])
         except (ValueError, TypeError):
             pass
 
-    orden = RENGLONES_SITUACION + [r for r in grupos if r not in RENGLONES_SITUACION]
+    # Renglones en orden
+    todos_renglon = RENGLONES_SITUACION + [r for r in grupos if r not in RENGLONES_SITUACION]
 
-    for renglon in orden:
-        if renglon not in grupos:
-            continue
+    for renglon in todos_renglon:
         p = doc.add_paragraph()
-        run = p.add_run(renglon)
-        run.bold = True
-        run.font.size = Pt(12)
-        run.font.color.rgb = RGBColor(0, 51, 102)
+        p.add_run(renglon).bold = True
 
-        for m in grupos[renglon]:
-            doc.add_paragraph(f"FECHA: {m.get('fecha', '')}   HORA: {m.get('hora', '')}")
-            doc.add_paragraph(m.get("hecho", ""))
-
-            # Análisis y Observación
-            if m.get("analisis"):
-                p2 = doc.add_paragraph()
-                p2.add_run("ANÁLISIS: ").bold = True
-                p2.add_run(m["analisis"])
-            if m.get("observacion"):
-                p2 = doc.add_paragraph()
-                p2.add_run("OBSERVACIÓN: ").bold = True
-                p2.add_run(m["observacion"])
-
-            # Fotografías
-            fotos = [x for x in m.get("media", []) if x.get("tipo") == "foto"]
-            if fotos:
-                p2 = doc.add_paragraph()
-                p2.add_run("EVIDENCIA FOTOGRÁFICA:").bold = True
-                for foto in fotos:
-                    fp = Path(foto.get("path", ""))
-                    if fp.is_file():
-                        try:
-                            doc.add_picture(str(fp), width=Inches(5.5))
-                        except Exception:
-                            doc.add_paragraph(f"[Imagen: {foto.get('filename', '')}]")
-
-            # Links
-            links = [x for x in m.get("media", []) if x.get("tipo") == "link"]
-            for lnk in links:
-                doc.add_paragraph(f"FUENTE: {lnk.get('url', '')}")
-
+        if renglon in grupos:
+            for m in grupos[renglon]:
+                _agregar_minuta(doc, m)
+        else:
             doc.add_paragraph()
 
-    # Situación eléctrica
+    # ── ABASTECIMIENTO Y COMBUSTIBLE ──────────────────────────────────────
+    doc.add_paragraph()
     p = doc.add_paragraph()
-    p.add_run("SITUACIÓN ELÉCTRICA:").bold = True
-    doc.add_paragraph(
-        "En el estado Zulia, se reporta que la capacidad operativa del sistema eléctrico se mantiene en un 60%, "
-        "lo que indica un nivel de funcionamiento estable pero todavía por debajo de la plena capacidad; esta "
-        "condición requiere monitoreo constante para prevenir interrupciones y garantizar la continuidad del "
-        "suministro tanto a nivel residencial como industrial."
+    p.add_run("ABASTECIMIENTO Y COMBUSTIBLE: ").bold = True
+    p.add_run(
+        "En cumplimiento de las tareas de monitoreo sobre el funcionamiento de las estaciones "
+        "de servicio (E/S) en Maracaibo, se realizó el levantamiento de información actualizada "
+        "para el día de hoy."
     )
+    doc.add_paragraph()
 
-    hoy = datetime.now(VENEZUELA_TZ)
-    nombre = f"SITUACION_OPERATIVA_{str(hoy.day).zfill(2)}{str(hoy.month).zfill(2)}{hoy.year}.docx"
-    ruta = _DATA / nombre
+    for eds, estado in eds_estado.items():
+        p = doc.add_paragraph()
+        p.add_run(f"{eds}: ").bold = True
+        p.add_run(estado)
+
+    doc.add_paragraph()
+
+    # ── ACCIDENTES DE TRÁNSITO ────────────────────────────────────────────
+    p = doc.add_paragraph()
+    p.add_run("ACCIDENTES DE TRÁNSITO:").bold = True
+
+    if accidentes:
+        for m in accidentes:
+            _agregar_minuta(doc, m)
+    else:
+        doc.add_paragraph()
+
+    # ── HOMICIDIOS ────────────────────────────────────────────────────────
+    p = doc.add_paragraph()
+    p.add_run("HOMICIDIOS: ").bold = True
+    p.add_run(f"({str(homicidios).zfill(2)}).")
+
+    doc.add_paragraph()
+
+    # ── ANEXO ─────────────────────────────────────────────────────────────
+    _header_oscuro(doc, "ANEXO", "2E75B6")
+    doc.add_paragraph()
+
+    # Fotos de todas las minutas asignadas como evidencia del anexo
+    todas_fotos = []
+    for idx_str in asignaciones:
+        try:
+            idx = int(idx_str)
+            if 0 <= idx < len(minutas):
+                for item in minutas[idx].get("media", []):
+                    if item.get("tipo") == "foto":
+                        todas_fotos.append(item)
+        except (ValueError, TypeError):
+            pass
+
+    if todas_fotos:
+        p = doc.add_paragraph()
+        p.add_run("EVIDENCIA FOTOGRÁFICA:").bold = True
+        for foto in todas_fotos:
+            fp = Path(foto.get("path", ""))
+            if fp.is_file():
+                try:
+                    doc.add_picture(str(fp), width=Inches(5.5))
+                except Exception:
+                    pass
+
+    ruta = _DATA / nombre_archivo_situacion()
     doc.save(str(ruta))
     return ruta

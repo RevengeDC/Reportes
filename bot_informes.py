@@ -16,6 +16,10 @@ MEDIA_DIR    = _DATA / "informes_media"
 OFFSET_FILE  = _DATA / "informes_offset.json"
 LOG_FILE     = _DATA / "mensajes_log.jsonl"   # registro permanente de mensajes
 VENEZUELA_TZ = timezone(timedelta(hours=-4))
+OBSERVACION_DEFAULT = (
+    "La información fue notificada a la digna superioridad en tiempo real "
+    "para su conocimiento, evaluación y fines consiguientes."
+)
 
 
 # ── Configuración ────────────────────────────────────────────────────────────
@@ -52,6 +56,29 @@ def parsear_formato_cpnb(texto):
     if m:
         hora = m.group(1)
     return fecha, hora
+
+
+def parsear_lugar(texto):
+    """Extrae LUGAR del texto CPNB-ZULIA."""
+    m = re.search(r'LUGAR:\s*(.+?)(?:\n|$)', texto, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().rstrip('.')
+    return ""
+
+
+def parsear_fuente(texto):
+    """Construye la fuente a partir del @usuario y plataforma detectados."""
+    plat = "Telegram"
+    if "instagram" in texto.lower():
+        plat = "Instagram"
+    elif "twitter" in texto.lower() or "x.com" in texto.lower():
+        plat = "Twitter/X"
+    elif "facebook" in texto.lower():
+        plat = "Facebook"
+    handles = re.findall(r'@[\w]+', texto)
+    if handles:
+        return f"Patrullaje cibernético realizado en la red social {plat}, usuario {handles[0]}"
+    return f"Patrullaje cibernético realizado en la red social {plat}"
 
 
 def limpiar_texto_cpnb(texto):
@@ -233,27 +260,35 @@ def tg_download_file(token, file_id):
 
 # ── Grok AI ──────────────────────────────────────────────────────────────────
 
-def generar_con_ia(texto, media_info=""):
-    """Genera Hecho, Análisis y Observación en lenguaje policial venezolano."""
+def generar_con_ia(texto, media_info="", lugar_hint="", fuente_hint=""):
+    """Genera todos los campos de la minuta en lenguaje policial venezolano."""
     grok_key = get_grok_key()
     if not grok_key:
-        return {"hecho": texto, "analisis": "", "observacion": ""}
+        return {
+            "lugar":      lugar_hint or "Estado Zulia",
+            "fuente":     fuente_hint or "Patrullaje cibernético en redes sociales",
+            "incidencia": texto[:80] if texto else "(sin texto)",
+            "hecho":      texto,
+            "analisis":   "",
+            "observacion": OBSERVACION_DEFAULT,
+        }
 
     extra  = f"\nMEDIOS ADJUNTOS: {media_info}" if media_info else ""
+    l_ctx  = f"\nLUGAR DETECTADO: {lugar_hint}" if lugar_hint else ""
+    f_ctx  = f"\nFUENTE DETECTADA: {fuente_hint}" if fuente_hint else ""
     prompt = (
         "Eres un analista del CPNB-ZULIA (Cuerpo de Policía Nacional Bolivariana - Zulia), "
         "especializado en monitoreo de redes sociales e inteligencia digital venezolana.\n\n"
-        "Basándote en el siguiente reporte de monitoreo cibernético, redacta una minuta policial "
-        "profesional en lenguaje formal venezolano:\n\n"
-        f"CONTENIDO DEL REPORTE:\n{texto}{extra}\n\n"
-        "Responde ÚNICAMENTE con JSON válido (sin texto fuera del JSON):\n"
+        "Redacta una minuta de monitoreo policial completa basándote en:\n\n"
+        f"CONTENIDO: {texto}{extra}{l_ctx}{f_ctx}\n\n"
+        "Responde ÚNICAMENTE con JSON válido:\n"
         "{\n"
-        '  "hecho": "descripción factual y objetiva del evento en lenguaje policial formal '
-        '(2-4 oraciones, comenzar con \'Mediante patrullaje cibernético...\' o similar)",\n'
-        '  "analisis": "análisis del impacto, contexto social/institucional e implicaciones '
-        'para el estado Zulia (2-3 oraciones)",\n'
-        '  "observacion": "recomendaciones operativas, acciones de seguimiento y alertas '
-        'a la superioridad (1-2 oraciones)"\n'
+        '  "lugar": "municipio/parroquia/estado donde ocurrió el hecho",\n'
+        '  "fuente": "Patrullaje cibernético realizado en la red social [plataforma], usuario @[handle]",\n'
+        '  "incidencia": "título breve del hecho en máximo 12 palabras",\n'
+        '  "hecho": "narrativa iniciando con Mediante labores de patrullaje cibernético en la red social [X] se tuvo conocimiento... (3-5 oraciones formales)",\n'
+        '  "analisis": "análisis del impacto e implicaciones institucionales (2-3 oraciones)",\n'
+        f'  "observacion": "{OBSERVACION_DEFAULT}"\n'
         "}"
     )
     try:
@@ -275,7 +310,14 @@ def generar_con_ia(texto, media_info=""):
             return json.loads(m.group())
     except Exception as e:
         print(f"[BOT-INFORMES] Error Grok: {e}")
-    return {"hecho": texto, "analisis": "", "observacion": ""}
+    return {
+        "lugar":      lugar_hint or "Estado Zulia",
+        "fuente":     fuente_hint or "Patrullaje cibernético en redes sociales",
+        "incidencia": texto[:80] if texto else "(sin texto)",
+        "hecho":      texto,
+        "analisis":   "",
+        "observacion": OBSERVACION_DEFAULT,
+    }
 
 
 # ── Offset persistence ───────────────────────────────────────────────────────
@@ -412,15 +454,21 @@ def procesar_mensaje(token, msg):
     if n_videos: partes.append(f"{n_videos} video(s)")
     if n_links:  partes.append(f"{n_links} enlace(s)")
 
-    ia = generar_con_ia(contenido, ", ".join(partes))
+    lugar_detectado  = parsear_lugar(texto)
+    fuente_detectada = parsear_fuente(texto)
+
+    ia = generar_con_ia(contenido, ", ".join(partes), lugar_detectado, fuente_detectada)
 
     minuta = {
         "fecha":          fecha_str,
         "hora":           hora_str,
         "cpnb":           "CPNB-ZULIA",
+        "lugar":          ia.get("lugar", lugar_detectado or "Estado Zulia"),
+        "fuente":         ia.get("fuente", fuente_detectada),
+        "incidencia":     ia.get("incidencia", ""),
         "hecho":          ia.get("hecho", contenido),
         "analisis":       ia.get("analisis", ""),
-        "observacion":    ia.get("observacion", ""),
+        "observacion":    ia.get("observacion", OBSERVACION_DEFAULT),
         "media":          media,
         "texto_original": texto,
         "ia":             True,
