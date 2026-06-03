@@ -1,0 +1,8 @@
+config.json
+estado_telegram.json
+fotos_gubernamentales/
+fotos_consulados/
+__pycache__/
+*.pptx
+*.pyc
+*.log

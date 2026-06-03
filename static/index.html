@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a237e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CPNB-ZULIA">
+<link rel="manifest" href="/manifest.json">
+<title>CPNB-ZULIA Monitor</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#eef0f5;color:#1a1a2e;overscroll-behavior:none}
+
+  /* ── Header ── */
+  header{
+    background:linear-gradient(135deg,#1a237e,#283593);
+    color:#fff;padding:14px 16px 14px;
+    display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;z-index:100;
+    box-shadow:0 3px 10px rgba(0,0,0,.35);
+  }
+  .hdr-left h1{font-size:1rem;font-weight:800;letter-spacing:.5px}
+  .hdr-left p{font-size:.62rem;opacity:.7;margin-top:1px}
+  .badge-total{
+    background:#ffd600;color:#1a237e;
+    padding:5px 11px;border-radius:14px;
+    font-size:.7rem;font-weight:800;white-space:nowrap;
+  }
+
+  /* ── Container ── */
+  .container{padding:12px;max-width:860px;margin:0 auto}
+
+  /* ── Responsable ── */
+  .resp-card{
+    background:#fff;border-radius:14px;padding:13px 15px;
+    margin-bottom:10px;display:flex;align-items:center;gap:12px;
+    box-shadow:0 1px 5px rgba(0,0,0,.09);
+  }
+  .resp-avatar{
+    width:46px;height:46px;border-radius:50%;flex-shrink:0;
+    background:#1a237e;display:flex;align-items:center;justify-content:center;
+    font-size:1.25rem;
+  }
+  .resp-info .lbl{font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.5px}
+  .resp-info .name{font-size:.92rem;font-weight:700;margin-top:1px}
+  .resp-info .detail{font-size:.72rem;color:#555;margin-top:1px}
+
+  /* ── Progress ── */
+  .prog-card{
+    background:#fff;border-radius:14px;padding:13px 15px;
+    margin-bottom:10px;box-shadow:0 1px 5px rgba(0,0,0,.09);
+  }
+  .prog-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+  .prog-row span:first-child{font-size:.75rem;font-weight:600}
+  .prog-row span:last-child{font-size:.72rem;color:#555}
+  .prog-bar{height:7px;background:#e0e3eb;border-radius:4px;overflow:hidden;margin-bottom:10px}
+  .prog-bar:last-child{margin-bottom:0}
+  .prog-fill{height:100%;border-radius:4px;transition:width .5s ease}
+  .prog-fill.gub{background:linear-gradient(90deg,#1a237e,#3949ab)}
+  .prog-fill.cons{background:linear-gradient(90deg,#bf360c,#e64a19)}
+
+  /* ── Acciones ── */
+  .actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .btn{
+    border:none;border-radius:12px;padding:11px 6px;
+    font-size:.7rem;font-weight:700;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    transition:transform .12s,filter .12s;
+  }
+  .btn:active{transform:scale(.94)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn .icon{font-size:1.4rem;line-height:1}
+  .btn-blue{background:#1a237e;color:#fff}
+  .btn-green{background:#1b5e20;color:#fff}
+  .btn-red{background:#b71c1c;color:#fff}
+
+  /* ── Section title ── */
+  .sec-title{
+    font-size:.7rem;font-weight:800;text-transform:uppercase;
+    letter-spacing:1px;color:#666;
+    margin:16px 0 8px;display:flex;align-items:center;gap:8px;
+  }
+  .sec-count{
+    background:#1a237e;color:#fff;
+    font-size:.6rem;padding:2px 7px;border-radius:10px;
+  }
+  .sec-count.cons{background:#bf360c}
+
+  /* ── Location cards ── */
+  .loc-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;margin-bottom:4px;
+  }
+  @media(min-width:480px){.loc-grid{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:680px){.loc-grid{grid-template-columns:repeat(5,1fr)}}
+
+  .loc-card{
+    background:#fff;border-radius:12px;overflow:hidden;
+    box-shadow:0 1px 5px rgba(0,0,0,.09);
+    position:relative;cursor:pointer;
+    transition:transform .12s,box-shadow .12s;
+  }
+  .loc-card.has-foto:active{transform:scale(.97)}
+  .loc-card .photo-wrap{
+    width:100%;aspect-ratio:4/3;
+    background:#e8eaf6;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+  .loc-card .photo-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+  .loc-card .ph-icon{font-size:2rem;opacity:.25}
+  .loc-card .info{padding:7px 8px 8px}
+  .loc-card .loc-name{font-size:.67rem;font-weight:700;line-height:1.25;margin-bottom:2px}
+  .loc-card .loc-coords{font-size:.58rem;color:#888}
+  .status-dot{
+    position:absolute;top:6px;right:6px;
+    width:11px;height:11px;border-radius:50%;border:2px solid #fff;
+  }
+  .dot-ok{background:#2e7d32}
+  .dot-no{background:#c62828}
+
+  /* ── Modal ── */
+  .modal{
+    display:none;position:fixed;inset:0;
+    background:rgba(0,0,0,.88);z-index:300;
+    align-items:center;justify-content:center;
+  }
+  .modal.open{display:flex}
+  .modal img{max-width:96vw;max-height:88vh;border-radius:8px;object-fit:contain}
+  .modal-close{
+    position:absolute;top:14px;right:14px;
+    background:#fff;border:none;width:36px;height:36px;
+    border-radius:50%;font-size:1rem;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.4);
+  }
+
+  /* ── Loading overlay ── */
+  .loading{
+    display:none;position:fixed;inset:0;
+    background:rgba(0,0,0,.45);z-index:200;
+    align-items:center;justify-content:center;
+  }
+  .loading.show{display:flex}
+  .loading-box{
+    background:#fff;padding:26px 36px;border-radius:18px;
+    text-align:center;font-size:.88rem;color:#333;
+    box-shadow:0 8px 30px rgba(0,0,0,.25);
+  }
+  .spinner{
+    width:34px;height:34px;border:3px solid #e0e0e0;
+    border-top-color:#1a237e;border-radius:50%;
+    animation:spin .65s linear infinite;margin:0 auto 12px;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── Selector responsable ── */
+  .resp-selector{
+    background:#fff;border-radius:14px;padding:13px 15px;
+    box-shadow:0 1px 5px rgba(0,0,0,.09);
+  }
+  .resp-selector .lbl{font-size:.62rem;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .resp-selector select{
+    width:100%;border:1.5px solid #c5cae9;border-radius:8px;
+    padding:8px 10px;font-size:.8rem;font-family:inherit;
+    color:#1a1a2e;background:#fff;appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%231a237e'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;
+    cursor:pointer;
+  }
+  .resp-selector select:focus{outline:none;border-color:#1a237e}
+
+  /* ── Toast ── */
+  .toast{
+    position:fixed;bottom:24px;left:50%;
+    transform:translateX(-50%) translateY(90px);
+    background:#323232;color:#fff;
+    padding:11px 22px;border-radius:24px;
+    font-size:.82rem;font-weight:600;
+    transition:transform .28s cubic-bezier(.34,1.56,.64,1);
+    z-index:400;white-space:nowrap;
+    max-width:92vw;text-align:center;
+  }
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  .toast.ok{background:#1b5e20}
+  .toast.err{background:#b71c1c}
+
+  .spacer{height:28px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-left">
+    <h1>&#128737; CPNB-ZULIA</h1>
+    <p>Monitor de Puntos</p>
+  </div>
+  <span class="badge-total" id="badge">&#8212;</span>
+</header>
+
+<div class="container">
+
+  <!-- Selectores de responsable -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+    <div class="resp-selector">
+      <div class="lbl">&#127963; Responsable Consulados</div>
+      <select id="sel-cons"><option value="">Cargando…</option></select>
+    </div>
+    <div class="resp-selector">
+      <div class="lbl">&#127981; Responsable Ministerio</div>
+      <select id="sel-min"><option value="">Cargando…</option></select>
+    </div>
+  </div>
+
+  <!-- Progreso -->
+  <div class="prog-card">
+    <div class="prog-row"><span>Gubernamentales</span><span id="pg-txt">0/10</span></div>
+    <div class="prog-bar"><div class="prog-fill gub" id="pg-fill" style="width:0%"></div></div>
+    <div class="prog-row"><span>Consulados</span><span id="pc-txt">0/8</span></div>
+    <div class="prog-bar"><div class="prog-fill cons" id="pc-fill" style="width:0%"></div></div>
+  </div>
+
+  <!-- Botones de acción -->
+  <div class="actions">
+    <button class="btn btn-blue" id="btn-act" onclick="actualizarTelegram()">
+      <span class="icon">&#128225;</span>Actualizar
+    </button>
+    <button class="btn btn-green" id="btn-cons" onclick="enviarReporte('consulados')">
+      <span class="icon">&#127963;</span>Consulados
+    </button>
+    <button class="btn btn-red" id="btn-min" onclick="enviarReporte('ministerio')">
+      <span class="icon">&#127981;</span>Ministerio
+    </button>
+  </div>
+
+  <!-- Gubernamentales -->
+  <div class="sec-title">
+    &#127981; Gubernamentales
+    <span class="sec-count" id="cnt-gub">0/10</span>
+  </div>
+  <div class="loc-grid" id="grid-gub"></div>
+
+  <!-- Consulados -->
+  <div class="sec-title" style="margin-top:18px">
+    &#127758; Consulados
+    <span class="sec-count cons" id="cnt-cons">0/8</span>
+  </div>
+  <div class="loc-grid" id="grid-cons"></div>
+
+  <div class="spacer"></div>
+</div>
+
+<!-- Modal foto ampliada -->
+<div class="modal" id="modal" onclick="closeModal()">
+  <button class="modal-close" onclick="closeModal()">&#10005;</button>
+  <img id="modal-img" src="" alt="Foto">
+</div>
+
+<!-- Loading -->
+<div class="loading" id="loading">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div id="loading-txt">Consultando Telegram…</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Estado global ──────────────────────────────────────────────
+let ts = 0;
+
+// ─── Cargar lista de personas en los selectores ──────────────────
+async function cargarPersonas() {
+  try {
+    const r = await fetch('/api/personas');
+    const d = await r.json();
+    ['sel-cons', 'sel-min'].forEach(id => {
+      const sel = document.getElementById(id);
+      sel.innerHTML = d.personas.map(p =>
+        `<option value="${p.ci}">${p.nombre} ${p.apellido}</option>`
+      ).join('');
+    });
+    // Los dos selectores arrancan con personas distintas por defecto
+    if (d.personas.length > 1) {
+      document.getElementById('sel-min').selectedIndex = 1;
+    }
+  } catch(e) {
+    showToast('Error cargando personas', 'err');
+  }
+}
+
+// ─── Render ─────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/status');
+    if (!r.ok) { showToast('Error al cargar estado', 'err'); return; }
+    const d = await r.json();
+    render(d);
+  } catch(e) {
+    showToast('Sin conexión con el servidor', 'err');
+  }
+}
+
+function render(d) {
+  ts = Date.now();
+
+  // Progreso
+  const gT = d.gubernamentales.length, gC = d.gubernamentales.filter(l=>l.tiene_foto).length;
+  const cT = d.consulados.length,      cC = d.consulados.filter(l=>l.tiene_foto).length;
+  document.getElementById('pg-fill').style.width = (gC/gT*100)+'%';
+  document.getElementById('pc-fill').style.width = (cC/cT*100)+'%';
+  document.getElementById('pg-txt').textContent  = gC+'/'+gT;
+  document.getElementById('pc-txt').textContent  = cC+'/'+cT;
+  document.getElementById('cnt-gub').textContent = gC+'/'+gT;
+  document.getElementById('cnt-cons').textContent= cC+'/'+cT;
+  document.getElementById('badge').textContent   = (gC+cC)+'/'+(gT+cT);
+
+  renderGrid('grid-gub',  d.gubernamentales);
+  renderGrid('grid-cons', d.consulados);
+}
+
+function renderGrid(id, lugares) {
+  const grid = document.getElementById(id);
+  grid.innerHTML = '';
+  lugares.forEach(loc => {
+    const card = document.createElement('div');
+    card.className = 'loc-card' + (loc.tiene_foto ? ' has-foto' : '');
+    if (loc.tiene_foto) card.onclick = () => openModal(loc.foto_url);
+
+    const foto = loc.tiene_foto
+      ? `<img src="${loc.foto_url}?t=${ts}" alt="${loc.nombre}" loading="lazy"
+              onerror="this.parentElement.innerHTML='<span class=ph-icon>&#128247;</span>'">`
+      : `<span class="ph-icon">&#128247;</span>`;
+
+    card.innerHTML =
+      `<div class="photo-wrap">${foto}</div>
+       <div class="info">
+         <div class="loc-name">${loc.nombre}</div>
+         <div class="loc-coords">${loc.coords}</div>
+       </div>
+       <div class="status-dot ${loc.tiene_foto ? 'dot-ok' : 'dot-no'}"></div>`;
+    grid.appendChild(card);
+  });
+}
+
+// ─── Acciones ────────────────────────────────────────────────────
+async function actualizarTelegram() {
+  setBtns(true);
+  showLoading('Consultando Telegram…');
+  try {
+    const r = await fetch('/api/actualizar', {method:'POST'});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Error');
+    await loadStatus();
+    let msg = 'Actualizado.';
+    if (d.actualizadas)    msg += ' ' + d.actualizadas + ' foto(s) nueva(s).';
+    if (d.sin_clasificar)  msg += ' ' + d.sin_clasificar + ' sin clasificar.';
+    showToast(msg, 'ok');
+  } catch(e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoading(); setBtns(false);
+  }
+}
+
+async function enviarReporte(tipo) {
+  const label = tipo === 'consulados' ? 'Consulados' : 'Ministerio';
+  const selId  = tipo === 'consulados' ? 'sel-cons' : 'sel-min';
+  const ci = document.getElementById(selId).value;
+  if (!ci) { showToast('Selecciona un responsable', 'err'); return; }
+
+  setBtns(true);
+  showLoading('Enviando reporte ' + label + '…');
+  try {
+    const r = await fetch('/api/reporte/' + tipo, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ci}),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Error');
+    showToast('Reporte ' + label + ' enviado (' + d.fotos_enviadas + ' fotos)', 'ok');
+  } catch(e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoading(); setBtns(false);
+  }
+}
+
+// ─── Modal ───────────────────────────────────────────────────────
+function openModal(url) {
+  document.getElementById('modal-img').src = url + '?t=' + Date.now();
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+// ─── UI helpers ──────────────────────────────────────────────────
+function showLoading(txt) {
+  document.getElementById('loading-txt').textContent = txt;
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loading').classList.remove('show');
+}
+function setBtns(disabled) {
+  ['btn-act','btn-cons','btn-min'].forEach(id => {
+    document.getElementById(id).disabled = disabled;
+  });
+}
+
+let toastTimer;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 3600);
+}
+
+// ─── Init ────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+cargarPersonas();
+loadStatus();
+setInterval(loadStatus, 60000);
+</script>
+</body>
+</html>
