@@ -68,7 +68,10 @@ except SystemExit:
     print("ERROR: faltan dependencias de ppt.py.")
     sys.exit(1)
 
-from informes import cargar_minutas, guardar_minutas, generar_docx, obtener_rango_horario
+from informes import (
+    cargar_minutas, guardar_minutas, generar_docx, obtener_rango_horario,
+    RENGLONES_SITUACION, generar_docx_situacion,
+)
 
 # Crear carpetas de datos al arrancar
 CARPETA_GUB.mkdir(parents=True, exist_ok=True)
@@ -274,6 +277,31 @@ def escanear_grupo_api(fecha: Optional[str] = Body(None, embed=True)):
         else:
             importadas = escanear_grupo()
         return {"ok": True, "importadas": importadas}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/renglones")
+def get_renglones():
+    return {"renglones": RENGLONES_SITUACION}
+
+
+class SituacionIn(BaseModel):
+    asignaciones: dict   # {"0": "ÁMBITO SOCIAL", "3": "SEGURIDAD CIUDADANA", ...}
+
+
+@app.post("/api/generar-situacion")
+def api_generar_situacion(data: SituacionIn):
+    minutas = cargar_minutas()
+    if not any(v for v in data.asignaciones.values()):
+        raise HTTPException(400, "Asigna al menos una minuta a un renglón")
+    try:
+        ruta = generar_docx_situacion(minutas, data.asignaciones)
+        return FileResponse(
+            str(ruta),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=ruta.name,
+        )
     except Exception as e:
         raise HTTPException(500, str(e))
 

@@ -244,6 +244,27 @@
   .btn-importar:active{opacity:.85}
   .btn-importar:disabled{opacity:.5;cursor:not-allowed}
 
+  /* ── Situación Operativa ── */
+  .sit-card{
+    background:#fff;border-radius:10px;padding:10px 12px;
+    margin-bottom:7px;box-shadow:0 1px 4px rgba(0,0,0,.08);
+  }
+  .sit-meta{font-size:.65rem;color:#888;margin-bottom:3px}
+  .sit-hecho{font-size:.73rem;color:#222;line-height:1.4;margin-bottom:6px;
+    max-height:52px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+    -webkit-line-clamp:3;-webkit-box-orient:vertical}
+  .sit-sel{
+    width:100%;border:1.5px solid #c5cae9;border-radius:8px;
+    padding:7px 10px;font-size:.76rem;font-family:inherit;
+    color:#1a1a2e;background:#fff;cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%231a237e'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;appearance:none;
+  }
+  .sit-sel:focus{outline:none;border-color:#1a237e}
+  .sit-asignada .sit-sel{border-color:#1b5e20;background-color:#f1f8f1}
+  .sit-thumb-row{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+  .sit-thumb{width:40px;height:40px;object-fit:cover;border-radius:5px;border:1.5px solid #e0e0e0;cursor:pointer}
+
   /* ── Badge IA y media en minutas ── */
   .minuta-ia{
     display:inline-flex;align-items:center;gap:2px;
@@ -293,6 +314,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('monitor')">&#128737; Monitor</button>
     <button class="tab-btn" onclick="switchTab('informes')">&#128196; Informes</button>
+    <button class="tab-btn" onclick="switchTab('situacion')">&#128202; Sit. Op.</button>
   </div>
 
   <!-- ═══════════════ TAB MONITOR ═══════════════ -->
@@ -426,6 +448,38 @@
   <div class="spacer"></div>
 </div>
 </div><!-- fin tab-informes -->
+
+<!-- ═══════════════ TAB SITUACIÓN OPERATIVA ═══════════════ -->
+<div class="tab-panel" id="tab-situacion">
+<div class="container">
+
+  <div class="rango-card" id="sit-rango">&#128336; Cargando…</div>
+
+  <div class="info-bot" style="background:#e8f5e9;color:#1b5e20">
+    &#128202; Selecciona el <strong>renglón</strong> de cada minuta para armar el Informe de Situación Operativa.
+    Las minutas sin renglón asignado no se incluyen.
+  </div>
+
+  <!-- Filtro fecha -->
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+    <div class="sec-title" style="margin:0">&#128203; Minutas</div>
+    <div class="filtros" style="margin-left:auto">
+      <button class="btn-filter active" id="sit-f-hoy"   onclick="setSitFiltro('hoy')">Hoy</button>
+      <button class="btn-filter"        id="sit-f-todas" onclick="setSitFiltro('todas')">Todas</button>
+    </div>
+  </div>
+
+  <div id="sit-lista">
+    <p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Cargando minutas…</p>
+  </div>
+
+  <button class="btn-generar" id="btn-sit-generar" onclick="generarSituacion()" style="background:linear-gradient(135deg,#0d47a1,#1565c0)">
+    &#128202; Generar Informe Situación Operativa
+  </button>
+
+  <div class="spacer"></div>
+</div>
+</div><!-- fin tab-situacion -->
 
 <!-- Modal foto ampliada -->
 <div class="modal" id="modal" onclick="closeModal()">
@@ -613,6 +667,9 @@ function switchTab(name) {
     loadMinutas();
     cargarFechasLog();
     informesTimer = setInterval(loadMinutas, 20000);
+  } else if (name === 'situacion') {
+    if (!_todasMinutas.length) loadMinutas().then(initSituacion);
+    else initSituacion();
   }
 }
 
@@ -807,6 +864,114 @@ async function generarInforme() {
     showToast(e.message, 'err');
   } finally {
     hideLoading(); btn.disabled = false;
+  }
+}
+
+// ─── Situación Operativa ─────────────────────────────────────────
+let _renglones      = [];
+let _asignaciones   = {};   // {idx: renglón_nombre}
+let _sitFiltroHoy   = true;
+
+async function initSituacion() {
+  if (!_renglones.length) {
+    const r = await fetch('/api/renglones');
+    const d = await r.json();
+    _renglones = d.renglones || [];
+  }
+  document.getElementById('sit-rango').textContent =
+    document.getElementById('rango-txt').textContent || '\u{1F550} Cargando…';
+  renderSituacion();
+}
+
+function setSitFiltro(tipo) {
+  _sitFiltroHoy = (tipo === 'hoy');
+  document.getElementById('sit-f-hoy').classList.toggle('active', _sitFiltroHoy);
+  document.getElementById('sit-f-todas').classList.toggle('active', !_sitFiltroHoy);
+  renderSituacion();
+}
+
+function renderSituacion() {
+  const lista = _sitFiltroHoy
+    ? _todasMinutas.filter(m => m.fecha === _fechaVe)
+    : _todasMinutas;
+
+  const el = document.getElementById('sit-lista');
+  if (!lista.length) {
+    el.innerHTML = '<p style="font-size:.78rem;color:#888;text-align:center;padding:20px">Sin minutas para este filtro</p>';
+    return;
+  }
+
+  const ts = Date.now();
+  el.innerHTML = lista.map((m, localIdx) => {
+    // índice real en _todasMinutas
+    const realIdx = _todasMinutas.indexOf(m);
+    const asig    = _asignaciones[realIdx] || '';
+    const fotos   = (m.media || []).filter(x => x.tipo === 'foto');
+    const thumbs  = fotos.slice(0, 3).map(f =>
+      `<img class="sit-thumb" src="/api/media-informe/${f.filename}?t=${ts}"
+         onclick="openModal('/api/media-informe/${f.filename}')"
+         onerror="this.style.display='none'">`
+    ).join('');
+
+    const opts = `<option value="">-- Sin asignar --</option>` +
+      _renglones.map(r =>
+        `<option value="${r}" ${asig === r ? 'selected' : ''}>${r}</option>`
+      ).join('');
+
+    return `
+      <div class="sit-card ${asig ? 'sit-asignada' : ''}" id="sit-card-${realIdx}">
+        <div class="sit-meta">${m.cpnb || 'CPNB-ZULIA'} &nbsp;|&nbsp; ${m.fecha} ${m.hora}
+          ${m.ia ? '<span class="minuta-ia">\u{1F916} IA</span>' : ''}
+        </div>
+        <div class="sit-hecho">${m.hecho}</div>
+        ${thumbs ? `<div class="sit-thumb-row">${thumbs}</div>` : ''}
+        <select class="sit-sel" onchange="asignarRenglon(${realIdx}, this.value)">${opts}</select>
+      </div>`;
+  }).join('');
+}
+
+function asignarRenglon(idx, valor) {
+  if (valor) {
+    _asignaciones[idx] = valor;
+  } else {
+    delete _asignaciones[idx];
+  }
+  const card = document.getElementById('sit-card-' + idx);
+  if (card) card.classList.toggle('sit-asignada', !!valor);
+}
+
+async function generarSituacion() {
+  const asignadas = Object.keys(_asignaciones).length;
+  if (!asignadas) {
+    showToast('Asigna al menos una minuta a un renglón', 'err');
+    return;
+  }
+  const btn = document.getElementById('btn-sit-generar');
+  btn.disabled = true;
+  showLoading('Generando Informe Situación Operativa…');
+  try {
+    const r = await fetch('/api/generar-situacion', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({asignaciones: _asignaciones}),
+    });
+    if (!r.ok) {
+      const d = await r.json();
+      throw new Error(d.detail || 'Error');
+    }
+    const blob = await r.blob();
+    const cd   = r.headers.get('content-disposition') || '';
+    const name = cd.match(/filename=(.+)/)?.[1] || 'situacion_operativa.docx';
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+    showToast('Informe descargado', 'ok');
+  } catch(e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoading();
+    btn.disabled = false;
   }
 }
 

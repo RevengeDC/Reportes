@@ -77,6 +77,16 @@ def nombre_archivo_informe():
     return f"INFORME_0800HRS_ENTORNO_ZULIA_{str(hoy.day).zfill(2)}{str(hoy.month).zfill(2)}{hoy.year}.docx"
 
 
+RENGLONES_SITUACION = [
+    "POLÍTICO",
+    "MONITOREO",
+    "DEPORTE",
+    "ECONÓMICO",
+    "AMBIENTAL",
+    "SUCESOS",
+]
+
+
 # ── Generación del DOCX ──────────────────────────────────────────────────────
 
 def generar_docx(minutas):
@@ -179,5 +189,112 @@ def generar_docx(minutas):
     )
 
     ruta = _DATA / nombre_archivo_informe()
+    doc.save(str(ruta))
+    return ruta
+
+
+def generar_docx_situacion(minutas, asignaciones):
+    """
+    Genera el Informe de Situación Operativa agrupando minutas por renglón.
+    asignaciones: dict {str(idx) -> nombre_renglón}
+    """
+    from docx import Document
+    from docx.shared import Pt, RGBColor, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    ahora = datetime.now(VENEZUELA_TZ)
+    rango, _ = obtener_rango_horario()
+
+    doc = Document()
+    for sec in doc.sections:
+        sec.top_margin = sec.bottom_margin = sec.left_margin = sec.right_margin = Inches(1)
+
+    # CONFIDENCIAL
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run("CONFIDENCIAL")
+    r.bold = True; r.font.size = Pt(16); r.font.color.rgb = RGBColor(204, 0, 0)
+
+    # TÍTULO
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run("INFORME DE SITUACIÓN OPERATIVA")
+    r.bold = True; r.font.size = Pt(14)
+
+    doc.add_paragraph(f"FECHA: {obtener_fecha_formato(ahora)}")
+    doc.add_paragraph("LUGAR: Estado ZULIA")
+    doc.add_paragraph(f"PERIODO: {rango}")
+    doc.add_paragraph()
+
+    # Agrupar minutas por renglón respetando orden de RENGLONES_SITUACION
+    grupos = {}
+    for idx_str, renglon in asignaciones.items():
+        if not renglon:
+            continue
+        try:
+            idx = int(idx_str)
+            if 0 <= idx < len(minutas):
+                grupos.setdefault(renglon, []).append(minutas[idx])
+        except (ValueError, TypeError):
+            pass
+
+    orden = RENGLONES_SITUACION + [r for r in grupos if r not in RENGLONES_SITUACION]
+
+    for renglon in orden:
+        if renglon not in grupos:
+            continue
+        p = doc.add_paragraph()
+        run = p.add_run(renglon)
+        run.bold = True
+        run.font.size = Pt(12)
+        run.font.color.rgb = RGBColor(0, 51, 102)
+
+        for m in grupos[renglon]:
+            doc.add_paragraph(f"FECHA: {m.get('fecha', '')}   HORA: {m.get('hora', '')}")
+            doc.add_paragraph(m.get("hecho", ""))
+
+            # Análisis y Observación
+            if m.get("analisis"):
+                p2 = doc.add_paragraph()
+                p2.add_run("ANÁLISIS: ").bold = True
+                p2.add_run(m["analisis"])
+            if m.get("observacion"):
+                p2 = doc.add_paragraph()
+                p2.add_run("OBSERVACIÓN: ").bold = True
+                p2.add_run(m["observacion"])
+
+            # Fotografías
+            fotos = [x for x in m.get("media", []) if x.get("tipo") == "foto"]
+            if fotos:
+                p2 = doc.add_paragraph()
+                p2.add_run("EVIDENCIA FOTOGRÁFICA:").bold = True
+                for foto in fotos:
+                    fp = Path(foto.get("path", ""))
+                    if fp.is_file():
+                        try:
+                            doc.add_picture(str(fp), width=Inches(5.5))
+                        except Exception:
+                            doc.add_paragraph(f"[Imagen: {foto.get('filename', '')}]")
+
+            # Links
+            links = [x for x in m.get("media", []) if x.get("tipo") == "link"]
+            for lnk in links:
+                doc.add_paragraph(f"FUENTE: {lnk.get('url', '')}")
+
+            doc.add_paragraph()
+
+    # Situación eléctrica
+    p = doc.add_paragraph()
+    p.add_run("SITUACIÓN ELÉCTRICA:").bold = True
+    doc.add_paragraph(
+        "En el estado Zulia, se reporta que la capacidad operativa del sistema eléctrico se mantiene en un 60%, "
+        "lo que indica un nivel de funcionamiento estable pero todavía por debajo de la plena capacidad; esta "
+        "condición requiere monitoreo constante para prevenir interrupciones y garantizar la continuidad del "
+        "suministro tanto a nivel residencial como industrial."
+    )
+
+    hoy = datetime.now(VENEZUELA_TZ)
+    nombre = f"SITUACION_OPERATIVA_{str(hoy.day).zfill(2)}{str(hoy.month).zfill(2)}{hoy.year}.docx"
+    ruta = _DATA / nombre
     doc.save(str(ruta))
     return ruta
