@@ -44,6 +44,11 @@ ANALISIS_TEXTOS = [
     "El análisis de contenidos en plataformas digitales permite identificar tendencias, evaluar alcance de mensajes y respuestas ciudadanas.",
 ]
 
+OBSERVACION_TEXTOS = [
+    "Se recomienda continuar con el monitoreo permanente de redes sociales y fuentes informativas para mantener actualizado el panorama situacional del estado.",
+    "Es importante mantener vigilancia sobre la evolución de estos eventos y su potencial impacto en la dinámica social de la región.",
+]
+
 RENGLONES_SITUACION = [
     "POLÍTICO",
     "MONITOREO",
@@ -371,7 +376,7 @@ def generar_docx_situacion(minutas, asignaciones, homicidios=0, eds_estado=None)
 
         if renglon in grupos:
             for m in grupos[renglon]:
-                _agregar_minuta(doc, m)
+                _agregar_minuta_completa(doc, m)
         else:
             doc.add_paragraph()
 
@@ -399,7 +404,7 @@ def generar_docx_situacion(minutas, asignaciones, homicidios=0, eds_estado=None)
 
     if accidentes:
         for m in accidentes:
-            _agregar_minuta(doc, m)
+            _agregar_minuta_completa(doc, m)
     else:
         doc.add_paragraph()
 
