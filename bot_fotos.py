@@ -51,7 +51,7 @@ def detectar_tipo_foto(texto):
     texto_lower = texto.lower()
 
     # Búsqueda de palabra clave EDS
-    if re.search(r'(e\.?s\.?|estacion.*servicio|gasolinera|bencinera)', texto_lower):
+    if re.search(r'(e[\./]?s[\./]?|estacion.*servicio|gasolinera|bencinera|bomba|surtidor)', texto_lower):
         return "eds"
 
     # Búsqueda de palabra clave HOSPITAL
