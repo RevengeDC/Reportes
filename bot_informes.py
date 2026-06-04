@@ -107,49 +107,96 @@ _HEADERS = {
 }
 
 
-def _guardar_imagen_bytes(data: bytes, content_type: str, key: str) -> Path:
-    """Guarda bytes de imagen en MEDIA_DIR con nombre único."""
+def _guardar_imagen_bytes(data: bytes, content_type: str, key: str) -> Path | None:
+    """Guarda bytes de imagen en MEDIA_DIR con nombre único basado en hash del contenido.
+    Retorna None si es una imagen muy pequeña (probablemente un placeholder)."""
+    if len(data) < 10000:  # Ignorar imágenes < 10KB (probables placeholders)
+        return None
+
     ct  = content_type.lower()
     ext = ".png" if "png" in ct else ".gif" if "gif" in ct else ".jpg"
-    fname = hashlib.md5(key.encode()).hexdigest()[:14] + ext
+
+    # Hash del contenido (deduplicación de imágenes idénticas)
+    content_hash = hashlib.md5(data).hexdigest()[:14]
+    fname = content_hash + ext
     dest  = MEDIA_DIR / fname
-    dest.write_bytes(data)
-    return dest
+
+    # Si ya existe, no volver a guardar
+    if dest.is_file():
+        return dest
+
+    try:
+        dest.write_bytes(data)
+        return dest
+    except Exception as e:
+        print(f"[BOT-INFORMES] Error guardando imagen: {e}")
+        return None
 
 
 def _descargar_imagen_url(img_url: str, base_url: str = "") -> Path | None:
-    """Descarga una imagen desde img_url (resuelve rutas relativas con base_url)."""
+    """Descarga una imagen desde img_url (resuelve rutas relativas con base_url).
+    Valida que sea una URL de imagen válida."""
     if not img_url:
         return None
+
+    img_url = img_url.strip()
+
+    # Ignorar URLs que no son de imagen
+    if any(x in img_url.lower() for x in ["logo", "placeholder", "icon", "ad-", "tracker", "pixel"]):
+        return None
+
+    # Resolver URLs relativas
     if img_url.startswith("//"):
         img_url = "https:" + img_url
     elif img_url.startswith("/") and base_url:
         from urllib.parse import urlparse
         p = urlparse(base_url)
         img_url = f"{p.scheme}://{p.netloc}{img_url}"
+
+    # Validar que sea HTTP(S)
+    if not img_url.startswith("http"):
+        return None
+
     try:
-        ir = requests.get(img_url, timeout=20, headers=_HEADERS)
+        ir = requests.get(img_url, timeout=20, headers=_HEADERS, allow_redirects=True)
         ir.raise_for_status()
+
+        # Validar que sea realmente imagen
+        ct = ir.headers.get("content-type", "").lower()
+        if "image" not in ct:
+            return None
+
         return _guardar_imagen_bytes(ir.content, ir.headers.get("content-type", "image/jpeg"), img_url)
     except Exception as e:
-        print(f"[BOT-INFORMES] Error descargando imagen {img_url[:60]}: {e}")
+        print(f"[BOT-INFORMES] Error descargando {img_url[:50]}: {type(e).__name__}")
     return None
 
 
 def _extraer_imagen_youtube(url: str) -> Path | None:
-    """Obtiene thumbnail de YouTube sin API."""
+    """Obtiene thumbnail de YouTube sin API - solo la mejor calidad."""
     m = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
     if not m:
         return None
     vid = m.group(1)
-    for quality in ("maxresdefault", "hqdefault", "mqdefault"):
-        thumb = f"https://img.youtube.com/vi/{vid}/{quality}.jpg"
-        try:
-            r = requests.get(thumb, timeout=10, headers=_HEADERS)
-            if r.status_code == 200 and len(r.content) > 5000:
-                return _guardar_imagen_bytes(r.content, "image/jpeg", thumb)
-        except Exception:
-            pass
+    # Intentar solo maxresdefault (mejor calidad)
+    thumb = f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg"
+    try:
+        r = requests.get(thumb, timeout=10, headers=_HEADERS)
+        if r.status_code == 200:
+            result = _guardar_imagen_bytes(r.content, "image/jpeg", thumb)
+            if result:
+                return result
+    except Exception:
+        pass
+
+    # Fallback a hqdefault si maxres no funciona
+    thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+    try:
+        r = requests.get(thumb, timeout=10, headers=_HEADERS)
+        if r.status_code == 200:
+            return _guardar_imagen_bytes(r.content, "image/jpeg", thumb)
+    except Exception:
+        pass
     return None
 
 
@@ -165,7 +212,9 @@ def _extraer_imagen_telegram(url: str) -> Path | None:
         for prop, attr in [("property", "og:image"), ("name", "og:image")]:
             tag = soup.find("meta", {prop: attr})
             if tag and tag.get("content"):
-                return _descargar_imagen_url(tag["content"], url)
+                img = _descargar_imagen_url(tag["content"], url)
+                if img:
+                    return img
 
         # Imagen dentro del widget del mensaje
         for cls in ("tgme_widget_message_photo_image", "tgme_widget_message_photo"):
@@ -173,36 +222,102 @@ def _extraer_imagen_telegram(url: str) -> Path | None:
             if img:
                 src = img.get("src") or img.get("data-src") or ""
                 if src:
-                    return _descargar_imagen_url(src, url)
+                    result = _descargar_imagen_url(src, url)
+                    if result:
+                        return result
 
         # background-image en style
         for tag in soup.find_all(style=re.compile(r"background-image")):
             m = re.search(r"url\(['\"]?(https?://[^'\")\s]+)['\"]?\)", tag.get("style", ""))
             if m:
-                return _descargar_imagen_url(m.group(1), url)
+                result = _descargar_imagen_url(m.group(1), url)
+                if result:
+                    return result
     except Exception as e:
-        print(f"[BOT-INFORMES] Error Telegram embed {url}: {e}")
+        print(f"[BOT-INFORMES] Error Telegram {url[:50]}: {type(e).__name__}")
+    return None
+
+
+def _extraer_imagen_instagram(url: str) -> Path | None:
+    """Extrae imagen de Instagram usando oembed o og:image."""
+    try:
+        # Intentar og:image primero (más rápido)
+        r = requests.get(url, timeout=15, headers=_HEADERS)
+        r.raise_for_status()
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        # og:image
+        for prop in ["property", "name"]:
+            tag = soup.find("meta", {prop: "og:image"})
+            if tag and tag.get("content"):
+                result = _descargar_imagen_url(tag["content"], url)
+                if result:
+                    return result
+    except Exception as e:
+        print(f"[BOT-INFORMES] Error Instagram {url[:50]}: {type(e).__name__}")
+    return None
+
+
+def _extraer_imagen_tiktok(url: str) -> Path | None:
+    """Extrae imagen (thumbnail) de TikTok usando og:image."""
+    try:
+        r = requests.get(url, timeout=15, headers=_HEADERS)
+        r.raise_for_status()
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        # og:image para TikTok
+        tag = soup.find("meta", {"property": "og:image"})
+        if not tag:
+            tag = soup.find("meta", {"name": "og:image"})
+        if tag and tag.get("content"):
+            result = _descargar_imagen_url(tag["content"], url)
+            if result:
+                return result
+    except Exception as e:
+        print(f"[BOT-INFORMES] Error TikTok {url[:50]}: {type(e).__name__}")
     return None
 
 
 def _extraer_imagen_og(url: str) -> Path | None:
-    """Extrae og:image / twitter:image de cualquier página web."""
+    """Extrae og:image / twitter:image de cualquier página web.
+    Intenta múltiples metas en orden de preferencia."""
     from bs4 import BeautifulSoup
     try:
         r = requests.get(url, timeout=15, headers=_HEADERS)
+        r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
-        for prop, attr in [
+
+        # Orden de preferencia para encontrar imágenes
+        preferencias = [
             ("property", "og:image"),
             ("name",     "og:image"),
             ("property", "twitter:image"),
             ("name",     "twitter:image"),
             ("itemprop", "image"),
-        ]:
-            tag = soup.find("meta", {prop: attr})
-            if tag and tag.get("content"):
-                return _descargar_imagen_url(tag["content"], url)
+        ]
+
+        for prop, attr in preferencias:
+            # Buscar todos los tags con este atributo
+            tags = soup.find_all("meta", {prop: attr})
+            for tag in tags:
+                img_url = tag.get("content", "").strip()
+                if img_url:
+                    result = _descargar_imagen_url(img_url, url)
+                    if result:
+                        return result  # Retornar la primera imagen válida
+
+        # Fallback: buscar primera imagen grande dentro del contenido
+        for img in soup.find_all("img", limit=10):
+            src = img.get("src") or img.get("data-src") or ""
+            if src and len(src) > 10:  # Ignorar imágenes con URLs muy cortas (iconos)
+                result = _descargar_imagen_url(src, url)
+                if result:
+                    return result
+
     except Exception as e:
-        print(f"[BOT-INFORMES] Error og:image {url}: {e}")
+        print(f"[BOT-INFORMES] Error og:image {url[:50]}: {type(e).__name__}")
     return None
 
 
@@ -211,19 +326,28 @@ def extraer_og_image(url: str) -> Path | None:
     if not url.startswith("http"):
         return None
 
+    url = url.strip()
     result = None
+
     try:
         if "youtube.com" in url or "youtu.be" in url:
             result = _extraer_imagen_youtube(url)
         elif "t.me" in url or "telegram.me" in url:
             result = _extraer_imagen_telegram(url)
+        elif "instagram.com" in url or "instagra.am" in url or "ig.me" in url:
+            result = _extraer_imagen_instagram(url)
+        elif "tiktok.com" in url or "vm.tiktok.com" in url or "vt.tiktok.com" in url:
+            result = _extraer_imagen_tiktok(url)
         else:
+            # Para cualquier otro sitio (noticias, etc.) usar og:image genérico
             result = _extraer_imagen_og(url)
     except Exception as e:
-        print(f"[BOT-INFORMES] extraer_og_image({url[:50]}): {e}")
+        print(f"[BOT-INFORMES] extraer_og_image({url[:50]}): {type(e).__name__}")
 
     if result:
-        print(f"[BOT-INFORMES] Imagen extraída: {result.name} ← {url[:65]}")
+        print(f"[BOT-INFORMES] ✓ Imagen: {result.name} ← {url[:65]}")
+    else:
+        print(f"[BOT-INFORMES] ✗ Sin imagen: {url[:65]}")
     return result
 
 
@@ -385,12 +509,14 @@ def procesar_mensaje(token, msg):
         return
 
     media = []
+    tiene_foto_directa = False
 
-    # ── Foto directa adjunta al mensaje ──
+    # ── Foto directa adjunta al mensaje (PRIORIDAD) ──
     if "photo" in msg:
         try:
             p = tg_download_file(token, msg["photo"][-1]["file_id"])
             media.append({"tipo": "foto", "filename": p.name, "path": str(p)})
+            tiene_foto_directa = True
             print(f"[BOT-INFORMES] Foto descargada: {p.name}")
         except Exception as e:
             print(f"[BOT-INFORMES] Error foto: {e}")
@@ -410,10 +536,11 @@ def procesar_mensaje(token, msg):
             try:
                 p = tg_download_file(token, msg["document"]["file_id"])
                 media.append({"tipo": "foto", "filename": p.name, "path": str(p)})
+                tiene_foto_directa = True
             except Exception as e:
                 print(f"[BOT-INFORMES] Error documento: {e}")
 
-    # ── Links: guardar + scraping de imagen ──
+    # ── Links: guardar + scraping de imagen (solo si NO hay foto directa) ──
     all_ents = msg.get("entities", []) + msg.get("caption_entities", [])
     for ent in all_ents:
         url = None
@@ -426,15 +553,17 @@ def procesar_mensaje(token, msg):
 
         media.append({"tipo": "link", "url": url})
 
-        # Intentar obtener imagen del artículo
-        img_path = extraer_og_image(url)
-        if img_path:
-            media.append({
-                "tipo":     "foto",
-                "filename": img_path.name,
-                "path":     str(img_path),
-                "fuente":   url,
-            })
+        # Solo extraer imagen de URL si no hay foto directa
+        if not tiene_foto_directa:
+            img_path = extraer_og_image(url)
+            if img_path:
+                media.append({
+                    "tipo":     "foto",
+                    "filename": img_path.name,
+                    "path":     str(img_path),
+                    "fuente":   url,
+                })
+                tiene_foto_directa = True  # Solo 1 foto por minuta
 
     # ── Extraer fecha/hora del formato CPNB-ZULIA ──
     fecha_str, hora_str = parsear_formato_cpnb(texto)

@@ -149,6 +149,25 @@ def _header_oscuro(doc, texto, color="1F2D6E"):
     return p
 
 
+def _limpiar_hecho(texto):
+    """Elimina URLs y prefijos como '1- se informó a la superioridad'."""
+    import re
+
+    # Remover URLs
+    texto = re.sub(r'https?://\S+|www\.\S+', '', texto)
+
+    # Remover prefijos numéricos como "1- ", "2- ", etc. al inicio o después de espacios
+    # También remover variaciones de "se informó a la superioridad"
+    texto = re.sub(r'^\d+\-\s*', '', texto)
+    texto = re.sub(r'\n\d+\-\s*', '\n', texto)
+    texto = re.sub(r'se\s+informó\s+a\s+la\s+superioridad[^.]*\.?\s*', '', texto, flags=re.IGNORECASE)
+
+    # Limpiar espacios en blanco excesivos
+    texto = re.sub(r'\s+', ' ', texto).strip()
+
+    return texto
+
+
 def _agregar_minuta(doc, m):
     """Formato simple para INFORME ESPECIAL: FECHA, HORA, HECHO, ANALISIS, OBSERVACION, 1 foto."""
     from docx.shared import Inches
@@ -159,7 +178,8 @@ def _agregar_minuta(doc, m):
 
     p = doc.add_paragraph()
     p.add_run("HECHO").bold = True
-    doc.add_paragraph(m.get("hecho", ""))
+    hecho_limpio = _limpiar_hecho(m.get("hecho", ""))
+    doc.add_paragraph(hecho_limpio)
 
     analisis = m.get("analisis") or "\n".join(ANALISIS_TEXTOS)
     p = doc.add_paragraph()
@@ -214,7 +234,8 @@ def _agregar_minuta_completa(doc, m):
 
     p = doc.add_paragraph()
     p.add_run("HECHO: ").bold = True
-    p.add_run(m.get("hecho", ""))
+    hecho_limpio = _limpiar_hecho(m.get("hecho", ""))
+    p.add_run(hecho_limpio)
 
     doc.add_paragraph()
 
