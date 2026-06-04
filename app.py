@@ -171,18 +171,32 @@ def get_foto(grupo: str, slug: str):
 @app.get("/api/foto-eds/{slug}")
 def get_foto_eds(slug: str):
     carpeta = _DATA_DIR / "fotos_eds"
-    foto = buscar_foto_de(slug, carpeta)
-    if not foto:
-        raise HTTPException(404, "Foto no encontrada")
+    if not carpeta.is_dir():
+        raise HTTPException(404, "Carpeta no encontrada")
+
+    # Buscar cualquier archivo que empiece con el slug
+    fotos = list(carpeta.glob(f"{slug}*.jpg")) + list(carpeta.glob(f"{slug}*.png"))
+    if not fotos:
+        raise HTTPException(404, f"Foto no encontrada para {slug}")
+
+    # Retorna la más reciente
+    foto = sorted(fotos)[-1]
     return FileResponse(str(foto))
 
 
 @app.get("/api/foto-hospitales/{slug}")
 def get_foto_hospitales(slug: str):
     carpeta = _DATA_DIR / "fotos_hospitales"
-    foto = buscar_foto_de(slug, carpeta)
-    if not foto:
-        raise HTTPException(404, "Foto no encontrada")
+    if not carpeta.is_dir():
+        raise HTTPException(404, "Carpeta no encontrada")
+
+    # Buscar cualquier archivo que empiece con el slug
+    fotos = list(carpeta.glob(f"{slug}*.jpg")) + list(carpeta.glob(f"{slug}*.png"))
+    if not fotos:
+        raise HTTPException(404, f"Foto no encontrada para {slug}")
+
+    # Retorna la más reciente
+    foto = sorted(fotos)[-1]
     return FileResponse(str(foto))
 
 
