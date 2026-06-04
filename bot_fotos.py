@@ -153,13 +153,17 @@ def procesar_mensaje(token, msg):
     texto = msg.get("caption", "")
     tipo, slug = detectar_tipo_y_nombre(texto)
 
+    print(f"[BOT-FOTOS] Procesando: tipo={tipo}, slug={slug}, texto={texto[:50]}")
+
     if not tipo:
         print(f"[BOT-FOTOS] Foto sin clasificación clara: {texto[:50]}")
         return False
 
     try:
         # Descargar foto
+        print(f"[BOT-FOTOS] Descargando foto...")
         data, ext = tg_download_file(token, msg["photo"][-1]["file_id"])
+        print(f"[BOT-FOTOS] Foto descargada: {len(data)} bytes, ext={ext}")
 
         # Determinar carpeta destino
         if tipo == "eds":
@@ -169,6 +173,10 @@ def procesar_mensaje(token, msg):
             destino = FOTOS_HOSPITALES_DIR
             tipo_nombre = "HOSPITAL"
 
+        # Asegurar que la carpeta existe
+        destino.mkdir(parents=True, exist_ok=True)
+        print(f"[BOT-FOTOS] Carpeta destino: {destino}")
+
         # Generar nombre de archivo: slug_timestamp.ext (sin slug si no se identificó)
         ahora = datetime.now(VENEZUELA_TZ)
         if slug:
@@ -176,26 +184,32 @@ def procesar_mensaje(token, msg):
             identificacion = f"{tipo_nombre} ({slug})"
         else:
             # Si no se identificó, usar el texto del caption limpio
-            nombre_limpio = texto.strip()[:30].replace("/", "_").replace("\\", "_")
+            nombre_limpio = texto.strip()[:30].replace("/", "_").replace("\\", "_").replace(" ", "_")
             filename = f"{tipo_nombre}_{nombre_limpio}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
             identificacion = f"{tipo_nombre}: {nombre_limpio}"
 
         ruta = destino / filename
         ruta_metadata = destino / (filename.replace(ext, ".txt"))
 
+        print(f"[BOT-FOTOS] Guardando a: {ruta}")
+
         # Guardar foto
         with ruta.open("wb") as f:
             f.write(data)
+        print(f"[BOT-FOTOS] Foto guardada ✓")
 
         # Guardar caption como metadata (para mostrar nombre en UI)
         with ruta_metadata.open("w", encoding="utf-8") as f:
             f.write(texto.strip())
+        print(f"[BOT-FOTOS] Metadata guardada ✓")
 
         print(f"[BOT-FOTOS] ✓ {identificacion}: {filename}")
         return True
 
     except Exception as e:
+        import traceback
         print(f"[BOT-FOTOS] Error procesando foto: {e}")
+        print(f"[BOT-FOTOS] Traceback: {traceback.format_exc()}")
         return False
 
 
