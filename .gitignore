@@ -1,5 +1,9 @@
 config.json
 estado_telegram.json
+minutas.json
+informes_media/
+mensajes_log.jsonl
+informes_offset.json
 fotos_gubernamentales/
 fotos_consulados/
 __pycache__/
