@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-_DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve() / "data"))
+_DATA        = Path(__file__).parent.resolve() / "data"
 MINUTAS_FILE = _DATA / "minutas.json"
 
 # Asegurar que el directorio existe

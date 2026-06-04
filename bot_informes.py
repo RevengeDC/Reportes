@@ -11,7 +11,7 @@ import requests
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
-_DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve() / "data"))
+_DATA        = Path(__file__).parent.resolve() / "data"
 MEDIA_DIR    = _DATA / "informes_media"
 
 # Asegurar que los directorios existen
