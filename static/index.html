@@ -568,23 +568,16 @@ function render(d) {
   // Progreso
   const gT = d.gubernamentales.length, gC = d.gubernamentales.filter(l=>l.tiene_foto).length;
   const cT = d.consulados.length,      cC = d.consulados.filter(l=>l.tiene_foto).length;
-  const eT = d.eds ? d.eds.length : 0, eC = d.eds ? d.eds.filter(l=>l.tiene_foto).length : 0;
-  const hT = d.hospitales ? d.hospitales.length : 0, hC = d.hospitales ? d.hospitales.filter(l=>l.tiene_foto).length : 0;
-
   document.getElementById('pg-fill').style.width = (gC/gT*100)+'%';
   document.getElementById('pc-fill').style.width = (cC/cT*100)+'%';
   document.getElementById('pg-txt').textContent  = gC+'/'+gT;
   document.getElementById('pc-txt').textContent  = cC+'/'+cT;
   document.getElementById('cnt-gub').textContent = gC+'/'+gT;
   document.getElementById('cnt-cons').textContent= cC+'/'+cT;
-  document.getElementById('cnt-eds').textContent = eC+'/'+eT;
-  document.getElementById('cnt-hospitales').textContent = hC+'/'+hT;
   document.getElementById('badge').textContent   = (gC+cC)+'/'+(gT+cT);
 
   renderGrid('grid-gub',  d.gubernamentales);
   renderGrid('grid-cons', d.consulados);
-  renderGrid('grid-eds',  d.eds || []);
-  renderGrid('grid-hospitales', d.hospitales || []);
 }
 
 function renderGrid(id, lugares) {
