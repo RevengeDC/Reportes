@@ -150,6 +150,41 @@ def procesar_mensaje(token, msg):
         return False
 
 
+def escanear_grupo_fotos():
+    """Escanea manualmente todas las fotos del grupo (sin offset)."""
+    token = get_fotos_bot_token()
+    if not token:
+        return 0
+
+    FOTOS_EDS_DIR.mkdir(parents=True, exist_ok=True)
+    FOTOS_HOSPITALES_DIR.mkdir(parents=True, exist_ok=True)
+
+    procesadas = 0
+    offset = 0
+
+    print("[BOT-FOTOS] Iniciando escaneo manual del grupo…")
+    while True:
+        try:
+            result = tg_get_updates(token, offset)
+            updates = result.get("result", [])
+            if not updates:
+                break
+            for upd in updates:
+                msg = upd.get("message") or upd.get("channel_post")
+                if msg and procesar_mensaje(token, msg):
+                    procesadas += 1
+                offset = upd["update_id"] + 1
+            _save_offset(offset)
+            if len(updates) < 100:
+                break
+        except Exception as e:
+            print(f"[BOT-FOTOS] Error escaneo: {e}")
+            break
+
+    print(f"[BOT-FOTOS] Escaneo terminado. {procesadas} foto(s) nueva(s).")
+    return procesadas
+
+
 def run_bot():
     """Loop principal del bot de fotos."""
     token = get_fotos_bot_token()

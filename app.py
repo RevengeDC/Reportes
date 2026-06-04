@@ -323,6 +323,17 @@ def escanear_grupo_api(fecha: Optional[str] = Body(None, embed=True)):
         raise HTTPException(500, str(e))
 
 
+@app.post("/api/escanear-fotos")
+def escanear_fotos_api():
+    """Escanea el grupo para obtener fotos de EDS y Hospitales."""
+    try:
+        from bot_fotos import escanear_grupo_fotos
+        procesadas = escanear_grupo_fotos()
+        return {"ok": True, "procesadas": procesadas}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/recuperar-minutas")
 def recuperar_minutas_api():
     """Recupera todas las minutas desde el log persistente del bot.

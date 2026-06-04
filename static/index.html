@@ -460,6 +460,11 @@
     Las minutas sin renglón asignado no se incluyen.
   </div>
 
+  <!-- Botón actualizar fotos -->
+  <button class="btn btn-blue" id="btn-scan-fotos" onclick="escanearFotos()" style="width:100%;margin-bottom:10px;padding:11px">
+    <span style="font-size:1.1rem">📸</span> Actualizar Fotos EDS/Hospitales
+  </button>
+
   <!-- Filtro fecha -->
   <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
     <div class="sec-title" style="margin:0">&#128203; Minutas</div>
@@ -930,6 +935,26 @@ async function initSituacion() {
   document.getElementById('sit-rango').textContent =
     document.getElementById('rango-txt').textContent || '\u{1F550} Cargando…';
   renderSituacion();
+}
+
+async function escanearFotos() {
+  const btn = document.getElementById('btn-scan-fotos');
+  btn.disabled = true;
+  showLoading('Escaneando fotos del grupo…');
+  try {
+    const r = await fetch('/api/escanear-fotos', {method: 'POST'});
+    if (!r.ok) throw new Error('Error al escanear');
+    const d = await r.json();
+    showToast(`${d.procesadas} foto(s) procesada(s)`, 'ok');
+    // Recargar las fotos
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await initSituacion();
+  } catch(e) {
+    showToast('Error escaneando fotos: ' + e.message, 'err');
+  } finally {
+    hideLoading();
+    btn.disabled = false;
+  }
 }
 
 function setSitFiltro(tipo) {
