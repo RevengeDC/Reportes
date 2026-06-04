@@ -43,28 +43,64 @@ def get_fotos_bot_token():
     return v.strip()
 
 
-def detectar_tipo_foto(texto):
-    """Detecta si la foto es de EDS o HOSPITAL basado en el texto del mensaje."""
+def detectar_tipo_y_nombre(texto):
+    """Detecta si la foto es de EDS o HOSPITAL y extrae el nombre específico.
+    Retorna tupla: (tipo, nombre_slug) o (None, None)"""
     if not texto:
-        return None
+        return None, None
 
     texto_lower = texto.lower()
 
-    # Búsqueda de palabra clave EDS
+    # Mapeo de nombres de EDS a slugs
+    eds_mapping = {
+        "servicios populares": "eds_servicios_populares",
+        "automotriz": "eds_automotriz",
+        "milagros": "eds_milagros",
+        "calzada": "eds_calzada",
+        "pichincha": "eds_pichincha",
+        "nigale": "eds_nigale",
+        "carmen": "eds_carmen",
+        "delicias": "eds_delicias",
+    }
+
+    # Mapeo de nombres de Hospitales a slugs
+    hospitales_mapping = {
+        "central": "hospital_central",
+        "clínico": "hospital_clinico",
+        "clinico": "hospital_clinico",
+        "pediatría": "hospital_pediatria",
+        "pediatria": "hospital_pediatria",
+        "cardiología": "hospital_cardiologia",
+        "cardiologia": "hospital_cardiologia",
+        "los andes": "clinica_los_andes",
+        "andes": "clinica_los_andes",
+        "del este": "clinica_del_este",
+        "este": "clinica_del_este",
+    }
+
+    # Detectar EDS
     if re.search(r'(e[\./]?s[\./]?|estacion.*servicio|gasolinera|bencinera|bomba|surtidor)', texto_lower):
-        return "eds"
+        # Buscar nombre específico
+        for nombre_clave, slug in eds_mapping.items():
+            if nombre_clave in texto_lower:
+                return "eds", slug
+        return "eds", None
 
-    # Búsqueda de palabra clave HOSPITAL
+    # Detectar HOSPITAL
     if re.search(r'(hospital|clinica|dispensario|centro.*salud)', texto_lower):
-        return "hospital"
+        # Buscar nombre específico
+        for nombre_clave, slug in hospitales_mapping.items():
+            if nombre_clave in texto_lower:
+                return "hospital", slug
+        return "hospital", None
 
-    # Búsqueda de emojis
+    # Detectar por emojis
     if "⛽" in texto or "🛢" in texto:
-        return "eds"
+        return "eds", None
     if "🏥" in texto or "⚕️" in texto:
-        return "hospital"
+        return "hospital", None
 
-    return None
+    return None, None
 
 
 def tg_get_updates(token, offset=0):
@@ -108,14 +144,14 @@ def _save_offset(v):
 
 
 def procesar_mensaje(token, msg):
-    """Procesa mensaje con foto y la clasifica como EDS o HOSPITAL."""
+    """Procesa mensaje con foto y la clasifica como EDS o HOSPITAL con identificación específica."""
 
     # Solo procesar si hay foto
     if "photo" not in msg:
         return False
 
     texto = msg.get("caption", "")
-    tipo = detectar_tipo_foto(texto)
+    tipo, slug = detectar_tipo_y_nombre(texto)
 
     if not tipo:
         print(f"[BOT-FOTOS] Foto sin clasificación clara: {texto[:50]}")
@@ -133,16 +169,22 @@ def procesar_mensaje(token, msg):
             destino = FOTOS_HOSPITALES_DIR
             tipo_nombre = "HOSPITAL"
 
-        # Generar nombre de archivo con timestamp
+        # Generar nombre de archivo: slug_timestamp.ext (sin slug si no se identificó)
         ahora = datetime.now(VENEZUELA_TZ)
-        filename = f"{tipo_nombre}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
+        if slug:
+            filename = f"{slug}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
+            identificacion = f"{tipo_nombre} ({slug})"
+        else:
+            filename = f"{tipo_nombre}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
+            identificacion = f"{tipo_nombre} (sin identificación)"
+
         ruta = destino / filename
 
-        # Guardar foto
+        # Guardar foto (sobrescribe si es del mismo lugar)
         with ruta.open("wb") as f:
             f.write(data)
 
-        print(f"[BOT-FOTOS] ✓ {tipo_nombre}: {filename}")
+        print(f"[BOT-FOTOS] ✓ {identificacion}: {filename}")
         return True
 
     except Exception as e:

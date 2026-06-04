@@ -120,14 +120,26 @@ def recuperar_minutas_desde_log():
 
 
 def buscar_foto_de(slug, directorio):
-    """Busca la primera foto que coincida con el slug en el directorio."""
+    """Busca la foto más reciente que coincida con el slug en el directorio."""
     try:
         if not Path(directorio).is_dir():
             return None
+
+        # Buscar fotos que empiezan con el slug
+        fotos = []
+        for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif']:
+            fotos.extend(Path(directorio).glob(f"{slug}*"))
+
+        if fotos:
+            # Retorna la más reciente (última por timestamp)
+            return sorted(fotos)[-1]
+
+        # Fallback: si no encuentra con slug específico, retorna cualquier foto
+        # (para compatibilidad hacia atrás)
         for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif']:
             fotos = list(Path(directorio).glob(ext))
             if fotos:
-                return sorted(fotos)[0]  # Retorna la primera (más reciente)
+                return sorted(fotos)[-1]
     except Exception:
         pass
     return None
