@@ -223,10 +223,13 @@ def escanear_grupo_fotos():
     FOTOS_HOSPITALES_DIR.mkdir(parents=True, exist_ok=True)
 
     procesadas = 0
-    offset = 0
+    offset = _load_offset()  # Usar offset actual, no 0
 
     print("[BOT-FOTOS] Iniciando escaneo manual del grupo…")
-    while True:
+    intentos = 0
+    max_intentos = 3
+
+    while intentos < max_intentos:
         try:
             result = tg_get_updates(token, offset)
             updates = result.get("result", [])
@@ -239,6 +242,17 @@ def escanear_grupo_fotos():
                 offset = upd["update_id"] + 1
             _save_offset(offset)
             if len(updates) < 100:
+                break
+        except requests.exceptions.HTTPError as e:
+            if "409" in str(e):
+                # 409 Conflict - el bot en background está activo, es normal
+                print(f"[BOT-FOTOS] Bot en background activo (409), esperando...")
+                intentos += 1
+                if intentos < max_intentos:
+                    time.sleep(2)
+                continue
+            else:
+                print(f"[BOT-FOTOS] Error HTTP: {e}")
                 break
         except Exception as e:
             print(f"[BOT-FOTOS] Error escaneo: {e}")
