@@ -282,14 +282,15 @@ def _extraer_imagen_tiktok(url: str) -> Path | None:
 
 def _extraer_imagen_og(url: str) -> Path | None:
     """Extrae og:image / twitter:image de cualquier página web.
-    Intenta múltiples metas en orden de preferencia."""
+    Intenta múltiples estrategias: meta tags, JSON-LD, y búsqueda en contenido."""
     from bs4 import BeautifulSoup
+    import json as json_lib
     try:
         r = requests.get(url, timeout=15, headers=_HEADERS)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Orden de preferencia para encontrar imágenes
+        # Estrategia 1: Meta tags (og:image, twitter:image, etc.)
         preferencias = [
             ("property", "og:image"),
             ("name",     "og:image"),
@@ -299,19 +300,64 @@ def _extraer_imagen_og(url: str) -> Path | None:
         ]
 
         for prop, attr in preferencias:
-            # Buscar todos los tags con este atributo
             tags = soup.find_all("meta", {prop: attr})
             for tag in tags:
                 img_url = tag.get("content", "").strip()
                 if img_url:
                     result = _descargar_imagen_url(img_url, url)
                     if result:
-                        return result  # Retornar la primera imagen válida
+                        return result
 
-        # Fallback: buscar primera imagen grande dentro del contenido
-        for img in soup.find_all("img", limit=10):
-            src = img.get("src") or img.get("data-src") or ""
-            if src and len(src) > 10:  # Ignorar imágenes con URLs muy cortas (iconos)
+        # Estrategia 2: JSON-LD (usado por muchos sitios de noticias)
+        for script in soup.find_all("script", {"type": "application/ld+json"}):
+            try:
+                data = json_lib.loads(script.string or "")
+                # Buscar imagen en estructura de Article
+                if isinstance(data, dict):
+                    img_url = data.get("image") or (data.get("articleBody", {}) or {}).get("image")
+                    if isinstance(img_url, str):
+                        result = _descargar_imagen_url(img_url, url)
+                        if result:
+                            return result
+                    elif isinstance(img_url, list) and img_url:
+                        img_url = img_url[0] if isinstance(img_url[0], str) else img_url[0].get("url", "")
+                        if img_url:
+                            result = _descargar_imagen_url(img_url, url)
+                            if result:
+                                return result
+            except Exception:
+                pass
+
+        # Estrategia 3: Buscar imágenes en contenedores comunes de artículos
+        contenedores = [
+            "article", "main", ".article", ".post", ".content", ".entry-content",
+            "[role='main']", ".story", ".news-item"
+        ]
+
+        for selector in contenedores:
+            try:
+                contenedor = soup.select_one(selector)
+                if not contenedor:
+                    continue
+
+                imgs = contenedor.find_all("img", limit=5)
+                for img in imgs:
+                    src = img.get("src") or img.get("data-src") or img.get("data-lazy-src") or ""
+                    if src and len(src) > 15:
+                        result = _descargar_imagen_url(src, url)
+                        if result:
+                            return result
+            except Exception:
+                pass
+
+        # Estrategia 4: Buscar la primera imagen grande en toda la página
+        for img in soup.find_all("img", limit=20):
+            src = img.get("src") or img.get("data-src") or img.get("data-lazy-src") or ""
+            if src and len(src) > 15:
+                # Filtrar imágenes típicamente pequeñas
+                alt = (img.get("alt") or "").lower()
+                if any(x in alt for x in ["logo", "icon", "avatar", "ad"]):
+                    continue
                 result = _descargar_imagen_url(src, url)
                 if result:
                     return result
