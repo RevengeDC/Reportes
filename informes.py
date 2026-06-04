@@ -7,8 +7,11 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-_DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve()))
+_DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve() / "data"))
 MINUTAS_FILE = _DATA / "minutas.json"
+
+# Asegurar que el directorio existe
+_DATA.mkdir(parents=True, exist_ok=True)
 VENEZUELA_TZ = timezone(timedelta(hours=-4))
 
 OBSERVACION_DEFAULT = (

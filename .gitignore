@@ -1,5 +1,7 @@
 config.json
 estado_telegram.json
+# Carpeta de datos (local y en Railway)
+data/
 minutas.json
 informes_media/
 mensajes_log.jsonl

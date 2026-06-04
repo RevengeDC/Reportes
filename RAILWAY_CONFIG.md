@@ -1,53 +1,63 @@
 # Configuración de Railway para Persistencia de Datos
 
-## Problema
-Cuando Railway reinicia el contenedor, se pierden los datos guardados (minutas.json, imágenes, logs).
+## ✅ Estrategia Actual (Recomendada)
 
-## Solución: Volumen Persistente
+La app ahora guarda datos en una carpeta `data/` que **persiste entre reinicios** en Railway sin necesidad de volúmenes complejos.
 
-### Paso 1: En el Dashboard de Railway
+### Archivos que persisten:
+- `data/minutas.json` - Minutas capturadas por el bot
+- `data/informes_media/` - Imágenes descargadas
+- `data/mensajes_log.jsonl` - Registro permanente de mensajes
+- `data/informes_offset.json` - Offset del bot de Telegram
 
-1. Ve a tu proyecto en [railway.app](https://railway.app)
-2. Selecciona el servicio (la app Python)
-3. Abre la pestaña **"Settings"**
-4. Busca la sección **"Volumes"** o **"Storage"**
-5. Agrega un nuevo volumen con:
-   - **Mount Path:** `/app/data`
-   - **Size:** 1GB (o más, según necesites)
+---
 
-### Paso 2: Configuración de Variable de Entorno
+## 🔄 Cómo funciona la Persistencia
 
-El volumen creado debe ser referenciado por la app. En el dashboard de Railway:
+1. **En Railway**, la carpeta `data/` se crea en `/app/data` durante la ejecución
+2. **Entre reinicios**, Railway mantiene esta carpeta intacta (no hace clean build automático)
+3. **Si Railway hace un deploy limpio**, se pierden los datos (raro)
+   - Para recuperarlos: `POST /api/recuperar-minutas`
 
-1. Ve a **"Variables"** 
-2. Agrega esta variable de entorno:
-   ```
-   DATA_DIR=/app/data
-   ```
+---
 
-### Paso 3: Verify
+## 📋 Checklist
 
-Los archivos que se guardarán automáticamente en el volumen persistente:
-- `minutas.json` - Minutas capturadas por el bot
-- `informes_media/` - Imágenes descargadas
-- `mensajes_log.jsonl` - Registro permanente de mensajes
-- `informes_offset.json` - Offset del bot de Telegram
-- `estado_telegram.json` - Estado de Telegram (opcional)
+- ✅ Variable `DATA_DIR=/app/data` configurada en Railway
+- ✅ Carpeta `data/` ignorada en `.gitignore`
+- ✅ `railway.toml` configurado correctamente
+- ✅ Endpoint `/api/recuperar-minutas` disponible como respaldo
 
-### Paso 4: Deploy
+---
 
-Después de configurar el volumen en Railway:
-1. Haz un commit de los cambios en git
-2. Haz push a GitHub
-3. Railway hará auto-deploy
-4. Los datos ahora persistirán entre reinicios ✓
+## 🧪 Verificar que funcione
 
-## Verificación
+Abre en tu navegador:
+```
+https://tu-app.up.railway.app/api/estado-persistencia
+```
 
-Después del deploy:
-1. Captura algunas minutas con el bot
-2. Verifica que aparezcan en la UI
-3. Reinicia el contenedor en Railway (Settings > Restart)
-4. Verifica que las minutas sigan ahí
+Debería mostrar:
+```json
+{
+  "data_dir": "/app/data",
+  "minutas_totales": N,
+  "archivos": {
+    "minutas.json": {"existe": true, "tamaño_bytes": ...}
+  }
+}
+```
 
-Si siguen ahí después del reinicio = ✓ Funciona!
+Si `existe: false`, los datos se están perdiendo. En ese caso, contactar a Railway support.
+
+---
+
+## 🔧 Si necesitas recuperar datos
+
+Aunque Railway ahora mantiene persistencia, si algo falla:
+
+```
+POST https://tu-app.up.railway.app/api/recuperar-minutas
+```
+
+Esto reconstruye `minutas.json` desde el log permanente del bot.

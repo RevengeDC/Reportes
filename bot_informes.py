@@ -11,8 +11,12 @@ import requests
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
-_DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve()))
+_DATA        = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve() / "data"))
 MEDIA_DIR    = _DATA / "informes_media"
+
+# Asegurar que los directorios existen
+_DATA.mkdir(parents=True, exist_ok=True)
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 OFFSET_FILE  = _DATA / "informes_offset.json"
 LOG_FILE     = _DATA / "mensajes_log.jsonl"   # registro permanente de mensajes
 VENEZUELA_TZ = timezone(timedelta(hours=-4))
