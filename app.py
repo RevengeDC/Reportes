@@ -334,6 +334,29 @@ def escanear_fotos_api():
         raise HTTPException(500, str(e))
 
 
+@app.post("/api/limpiar-fotos")
+def limpiar_fotos_api():
+    """Limpia todas las fotos de EDS y Hospitales."""
+    try:
+        import shutil
+        eds_dir = _DATA_DIR / "fotos_eds"
+        hosp_dir = _DATA_DIR / "fotos_hospitales"
+
+        eliminadas = 0
+        if eds_dir.is_dir():
+            for f in eds_dir.glob("*"):
+                f.unlink()
+                eliminadas += 1
+        if hosp_dir.is_dir():
+            for f in hosp_dir.glob("*"):
+                f.unlink()
+                eliminadas += 1
+
+        return {"ok": True, "eliminadas": eliminadas}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/recuperar-minutas")
 def recuperar_minutas_api():
     """Recupera todas las minutas desde el log persistente del bot.
