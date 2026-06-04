@@ -482,6 +482,20 @@
     </div>
   </div>
 
+  <!-- Estaciones de Servicio -->
+  <div class="sec-title" style="margin-top:14px">
+    ⛽ Estaciones de Servicio
+    <span class="sec-count" id="cnt-eds-sit">0/8</span>
+  </div>
+  <div class="loc-grid" id="grid-eds-sit"></div>
+
+  <!-- Hospitales -->
+  <div class="sec-title" style="margin-top:14px">
+    🏥 Hospitales
+    <span class="sec-count" id="cnt-hospitales-sit">0/6</span>
+  </div>
+  <div class="loc-grid" id="grid-hospitales-sit"></div>
+
   <button class="btn-generar" id="btn-sit-generar" onclick="generarSituacion()" style="background:linear-gradient(135deg,#0d47a1,#1565c0)">
     &#128202; Generar Informe Situación Operativa
   </button>
@@ -549,16 +563,23 @@ function render(d) {
   // Progreso
   const gT = d.gubernamentales.length, gC = d.gubernamentales.filter(l=>l.tiene_foto).length;
   const cT = d.consulados.length,      cC = d.consulados.filter(l=>l.tiene_foto).length;
+  const eT = d.eds ? d.eds.length : 0, eC = d.eds ? d.eds.filter(l=>l.tiene_foto).length : 0;
+  const hT = d.hospitales ? d.hospitales.length : 0, hC = d.hospitales ? d.hospitales.filter(l=>l.tiene_foto).length : 0;
+
   document.getElementById('pg-fill').style.width = (gC/gT*100)+'%';
   document.getElementById('pc-fill').style.width = (cC/cT*100)+'%';
   document.getElementById('pg-txt').textContent  = gC+'/'+gT;
   document.getElementById('pc-txt').textContent  = cC+'/'+cT;
   document.getElementById('cnt-gub').textContent = gC+'/'+gT;
   document.getElementById('cnt-cons').textContent= cC+'/'+cT;
+  document.getElementById('cnt-eds').textContent = eC+'/'+eT;
+  document.getElementById('cnt-hospitales').textContent = hC+'/'+hT;
   document.getElementById('badge').textContent   = (gC+cC)+'/'+(gT+cT);
 
   renderGrid('grid-gub',  d.gubernamentales);
   renderGrid('grid-cons', d.consulados);
+  renderGrid('grid-eds',  d.eds || []);
+  renderGrid('grid-hospitales', d.hospitales || []);
 }
 
 function renderGrid(id, lugares) {
@@ -886,6 +907,25 @@ async function initSituacion() {
     const r = await fetch('/api/renglones');
     const d = await r.json();
     _renglones = d.renglones || [];
+  }
+  // Cargar status para EDS y Hospitales
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    if (d.eds) {
+      const eC = d.eds.filter(l=>l.tiene_foto).length;
+      const eT = d.eds.length;
+      document.getElementById('cnt-eds-sit').textContent = eC+'/'+eT;
+      renderGrid('grid-eds-sit', d.eds);
+    }
+    if (d.hospitales) {
+      const hC = d.hospitales.filter(l=>l.tiene_foto).length;
+      const hT = d.hospitales.length;
+      document.getElementById('cnt-hospitales-sit').textContent = hC+'/'+hT;
+      renderGrid('grid-hospitales-sit', d.hospitales);
+    }
+  } catch(e) {
+    console.log('Error cargando EDS/Hospitales:', e);
   }
   document.getElementById('sit-rango').textContent =
     document.getElementById('rango-txt').textContent || '\u{1F550} Cargando…';
