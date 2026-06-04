@@ -346,6 +346,22 @@ def estado_persistencia_api():
     return estado
 
 
+@app.post("/api/resetear-offset")
+def resetear_offset_api():
+    """Elimina el archivo de offset del bot para resolver errores 409."""
+    from pathlib import Path
+    try:
+        offset_file = _DATA_DIR / "informes_offset.json"
+        if offset_file.is_file():
+            offset_file.unlink()
+            print("[API] Offset del bot reseteado.")
+            return {"ok": True, "mensaje": "Offset reseteado. El bot volverá a sincronizarse."}
+        else:
+            return {"ok": True, "mensaje": "El archivo de offset no existía."}
+    except Exception as e:
+        raise HTTPException(500, f"Error reseteando offset: {e}")
+
+
 @app.get("/api/renglones")
 def get_renglones():
     return {
