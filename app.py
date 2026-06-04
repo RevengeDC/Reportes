@@ -70,7 +70,7 @@ except SystemExit:
 
 from informes import (
     cargar_minutas, guardar_minutas, generar_docx, obtener_rango_horario,
-    RENGLONES_SITUACION, EDS_MARACAIBO, generar_docx_situacion,
+    RENGLONES_SITUACION, EDS_MARACAIBO, generar_docx_situacion, recuperar_minutas_desde_log,
 )
 
 # Crear carpetas de datos al arrancar
@@ -279,6 +279,63 @@ def escanear_grupo_api(fecha: Optional[str] = Body(None, embed=True)):
         return {"ok": True, "importadas": importadas}
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.post("/api/recuperar-minutas")
+def recuperar_minutas_api():
+    """Recupera todas las minutas desde el log persistente del bot.
+    Útil si minutas.json se pierde o se corrompe."""
+    try:
+        minutas_antes = len(cargar_minutas())
+        importadas = recuperar_minutas_desde_log()
+        minutas_ahora = len(cargar_minutas())
+        return {
+            "ok": True,
+            "minutas_antes": minutas_antes,
+            "minutas_ahora": minutas_ahora,
+            "nuevas_importadas": importadas,
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/estado-persistencia")
+def estado_persistencia_api():
+    """Muestra el estado de los archivos de datos persistentes."""
+    from pathlib import Path
+    import os
+
+    data_dir = _DATA_DIR
+    estado = {
+        "data_dir": str(data_dir),
+        "archivos": {}
+    }
+
+    archivos_importantes = [
+        "minutas.json",
+        "mensajes_log.jsonl",
+        "informes_offset.json",
+    ]
+
+    for archivo in archivos_importantes:
+        ruta = data_dir / archivo
+        if ruta.is_file():
+            tamaño = os.path.getsize(ruta)
+            estado["archivos"][archivo] = {
+                "existe": True,
+                "tamaño_bytes": tamaño,
+                "ruta": str(ruta)
+            }
+        else:
+            estado["archivos"][archivo] = {
+                "existe": False,
+                "ruta": str(ruta)
+            }
+
+    # Contador de minutas actuales
+    estado["minutas_totales"] = len(cargar_minutas())
+
+    return estado
 
 
 @app.get("/api/renglones")

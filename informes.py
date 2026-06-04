@@ -84,6 +84,18 @@ def guardar_minutas(minutas):
         json.dump(minutas, f, ensure_ascii=False, indent=2)
 
 
+def recuperar_minutas_desde_log():
+    """Recupera todas las minutas desde el log persistente del bot de Telegram.
+    Esto es un respaldo en caso de que minutas.json se pierda."""
+    from bot_informes import escanear_desde_log
+    try:
+        # Reimporta desde el log sin filtro de fecha (todos los mensajes)
+        return escanear_desde_log(fecha=None)
+    except Exception as e:
+        print(f"[INFORMES] Error recuperando desde log: {e}")
+        return 0
+
+
 # ── Fechas (hora Venezuela UTC-4) ────────────────────────────────────────────
 
 def obtener_fecha_formato(fecha=None):
