@@ -93,16 +93,25 @@ app = FastAPI(title="CPNB-ZULIA Monitor")
 def start_informes_bot():
     global _BOT_INICIADO
     if _BOT_INICIADO:
-        print("[APP] Bot de informes ya está corriendo (evitando duplicado).")
+        print("[APP] Bots ya están corriendo (evitando duplicados).")
         return
     try:
-        from bot_informes import run_bot
-        t = threading.Thread(target=run_bot, daemon=True, name="bot-informes")
-        t.start()
-        _BOT_INICIADO = True
-        print("[APP] Bot de informes iniciado en hilo daemon (única instancia).")
+        from bot_informes import run_bot as run_bot_informes
+        t1 = threading.Thread(target=run_bot_informes, daemon=True, name="bot-informes")
+        t1.start()
+        print("[APP] Bot de informes iniciado en hilo daemon.")
     except Exception as e:
         print(f"[APP] Bot de informes no iniciado: {e}")
+
+    try:
+        from bot_fotos import run_bot as run_bot_fotos
+        t2 = threading.Thread(target=run_bot_fotos, daemon=True, name="bot-fotos")
+        t2.start()
+        print("[APP] Bot de fotos iniciado en hilo daemon.")
+    except Exception as e:
+        print(f"[APP] Bot de fotos no iniciado: {e}")
+
+    _BOT_INICIADO = True
 
 
 # ── API Monitor ──────────────────────────────────────────────────────────────

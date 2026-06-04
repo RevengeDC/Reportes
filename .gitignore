@@ -6,6 +6,8 @@ minutas.json
 informes_media/
 mensajes_log.jsonl
 informes_offset.json
+fotos_eds/
+fotos_hospitales/
 fotos_gubernamentales/
 fotos_consulados/
 __pycache__/

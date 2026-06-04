@@ -1,0 +1,180 @@
+"""
+bot_fotos.py — Bot Telegram para capturar fotos de Estaciones de Servicio y Hospitales
+Flujo: mensaje con foto + etiqueta (EDS/HOSPITAL) → descarga foto → guarda en carpeta específica
+"""
+import json
+import os
+import re
+import time
+import requests
+from pathlib import Path
+from datetime import datetime, timezone, timedelta
+
+_DATA = Path(os.environ.get("DATA_DIR", Path(__file__).parent.resolve() / "data"))
+FOTOS_EDS_DIR = _DATA / "fotos_eds"
+FOTOS_HOSPITALES_DIR = _DATA / "fotos_hospitales"
+OFFSET_FILE = _DATA / "fotos_offset.json"
+VENEZUELA_TZ = timezone(timedelta(hours=-4))
+
+# Asegurar que los directorios existen
+FOTOS_EDS_DIR.mkdir(parents=True, exist_ok=True)
+FOTOS_HOSPITALES_DIR.mkdir(parents=True, exist_ok=True)
+
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+    )
+}
+
+
+def _cfg():
+    path = Path(__file__).parent / "config.json"
+    if path.is_file():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def get_fotos_bot_token():
+    v = os.environ.get("FOTOS_BOT_TOKEN") or _cfg().get("fotos_bot_token", "")
+    return v.strip()
+
+
+def detectar_tipo_foto(texto):
+    """Detecta si la foto es de EDS o HOSPITAL basado en el texto del mensaje."""
+    if not texto:
+        return None
+
+    texto_lower = texto.lower()
+
+    # Búsqueda de palabra clave EDS
+    if re.search(r'(e\.?s\.?|estacion.*servicio|gasolinera|bencinera)', texto_lower):
+        return "eds"
+
+    # Búsqueda de palabra clave HOSPITAL
+    if re.search(r'(hospital|clinica|dispensario|centro.*salud)', texto_lower):
+        return "hospital"
+
+    # Búsqueda de emojis
+    if "⛽" in texto or "🛢" in texto:
+        return "eds"
+    if "🏥" in texto or "⚕️" in texto:
+        return "hospital"
+
+    return None
+
+
+def tg_get_updates(token, offset=0):
+    r = requests.get(
+        f"https://api.telegram.org/bot{token}/getUpdates",
+        params={"offset": offset, "timeout": 25},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def tg_download_file(token, file_id):
+    r = requests.get(
+        f"https://api.telegram.org/bot{token}/getFile",
+        params={"file_id": file_id},
+        timeout=10,
+    )
+    r.raise_for_status()
+    file_path = r.json()["result"]["file_path"]
+    ext = Path(file_path).suffix or ".jpg"
+    raw = requests.get(
+        f"https://api.telegram.org/file/bot{token}/{file_path}",
+        timeout=60,
+    )
+    raw.raise_for_status()
+    return raw.content, ext
+
+
+def _load_offset():
+    if OFFSET_FILE.is_file():
+        try:
+            return int(OFFSET_FILE.read_text().strip())
+        except Exception:
+            pass
+    return 0
+
+
+def _save_offset(v):
+    OFFSET_FILE.write_text(str(v))
+
+
+def procesar_mensaje(token, msg):
+    """Procesa mensaje con foto y la clasifica como EDS o HOSPITAL."""
+
+    # Solo procesar si hay foto
+    if "photo" not in msg:
+        return False
+
+    texto = msg.get("caption", "")
+    tipo = detectar_tipo_foto(texto)
+
+    if not tipo:
+        print(f"[BOT-FOTOS] Foto sin clasificación clara: {texto[:50]}")
+        return False
+
+    try:
+        # Descargar foto
+        data, ext = tg_download_file(token, msg["photo"][-1]["file_id"])
+
+        # Determinar carpeta destino
+        if tipo == "eds":
+            destino = FOTOS_EDS_DIR
+            tipo_nombre = "EDS"
+        else:
+            destino = FOTOS_HOSPITALES_DIR
+            tipo_nombre = "HOSPITAL"
+
+        # Generar nombre de archivo con timestamp
+        ahora = datetime.now(VENEZUELA_TZ)
+        filename = f"{tipo_nombre}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
+        ruta = destino / filename
+
+        # Guardar foto
+        with ruta.open("wb") as f:
+            f.write(data)
+
+        print(f"[BOT-FOTOS] ✓ {tipo_nombre}: {filename}")
+        return True
+
+    except Exception as e:
+        print(f"[BOT-FOTOS] Error procesando foto: {e}")
+        return False
+
+
+def run_bot():
+    """Loop principal del bot de fotos."""
+    token = get_fotos_bot_token()
+    if not token:
+        print("[BOT-FOTOS] Sin FOTOS_BOT_TOKEN configurado — bot no iniciado.")
+        return
+
+    FOTOS_EDS_DIR.mkdir(parents=True, exist_ok=True)
+    FOTOS_HOSPITALES_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("[BOT-FOTOS] Bot de fotos iniciado, monitoreando fotos…")
+    offset = _load_offset()
+
+    while True:
+        try:
+            result = tg_get_updates(token, offset)
+            for upd in result.get("result", []):
+                msg = upd.get("message") or upd.get("channel_post")
+                if msg:
+                    try:
+                        procesar_mensaje(token, msg)
+                    except Exception as e:
+                        print(f"[BOT-FOTOS] Error procesando mensaje: {e}")
+                offset = upd["update_id"] + 1
+                _save_offset(offset)
+        except Exception as e:
+            print(f"[BOT-FOTOS] Error polling: {e}")
+            time.sleep(5)

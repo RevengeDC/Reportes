@@ -455,26 +455,33 @@ def generar_docx_situacion(minutas, asignaciones, homicidios=0, eds_estado=None)
     _header_oscuro(doc, "ANEXO", "2E75B6")
     doc.add_paragraph()
 
-    # Fotos de todas las minutas asignadas como evidencia del anexo
-    todas_fotos = []
-    for idx_str in asignaciones:
-        try:
-            idx = int(idx_str)
-            if 0 <= idx < len(minutas):
-                for item in minutas[idx].get("media", []):
-                    if item.get("tipo") == "foto":
-                        todas_fotos.append(item)
-        except (ValueError, TypeError):
-            pass
-
-    if todas_fotos:
-        p = doc.add_paragraph()
-        p.add_run("EVIDENCIA FOTOGRÁFICA:").bold = True
-        for foto in todas_fotos:
-            fp = Path(foto.get("path", ""))
-            if fp.is_file():
+    # ESTACIONES DE SERVICIO
+    fotos_eds_dir = _DATA / "fotos_eds"
+    if fotos_eds_dir.is_dir():
+        fotos_eds = sorted(fotos_eds_dir.glob("*.jpg")) + sorted(fotos_eds_dir.glob("*.png"))
+        if fotos_eds:
+            p = doc.add_paragraph()
+            p.add_run("ESTACIONES DE SERVICIO:").bold = True
+            doc.add_paragraph()
+            for foto in fotos_eds:
                 try:
-                    doc.add_picture(str(fp), width=Inches(5.5))
+                    doc.add_picture(str(foto), width=Inches(5.5))
+                    doc.add_paragraph()
+                except Exception:
+                    pass
+
+    # HOSPITALES
+    fotos_hospitales_dir = _DATA / "fotos_hospitales"
+    if fotos_hospitales_dir.is_dir():
+        fotos_hospitales = sorted(fotos_hospitales_dir.glob("*.jpg")) + sorted(fotos_hospitales_dir.glob("*.png"))
+        if fotos_hospitales:
+            p = doc.add_paragraph()
+            p.add_run("HOSPITALES:").bold = True
+            doc.add_paragraph()
+            for foto in fotos_hospitales:
+                try:
+                    doc.add_picture(str(foto), width=Inches(5.5))
+                    doc.add_paragraph()
                 except Exception:
                     pass
 
