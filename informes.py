@@ -146,32 +146,74 @@ def buscar_foto_de(slug, directorio):
 
 
 def obtener_fotos_eds():
-    """Retorna lista de EDS con información de si tienen foto."""
+    """Retorna lista dinámica de EDS basada en fotos reales."""
     carpeta = _DATA / "fotos_eds"
     fotos_eds = []
-    for lugar in LUGARES_EDS:
-        foto = buscar_foto_de(lugar["slug"], carpeta)
+
+    if not carpeta.is_dir():
+        return fotos_eds
+
+    # Obtener todas las fotos únicas (por nombre base sin timestamp)
+    fotos_dict = {}  # {nombre_base: (foto_path, metadata)}
+    for foto in carpeta.glob("*.jpg"):
+        # Obtener nombre base (sin timestamp)
+        nombre_base = "_".join(foto.stem.split("_")[:-2])  # Quita _YYYYMMDD_HHMMSS
+        if nombre_base and nombre_base not in fotos_dict:
+            # Buscar metadata
+            metadata_path = carpeta / (foto.stem + ".txt")
+            nombre_mostrar = foto.stem
+            if metadata_path.is_file():
+                try:
+                    nombre_mostrar = metadata_path.read_text(encoding="utf-8").strip()
+                except:
+                    pass
+            fotos_dict[nombre_base] = (foto, nombre_mostrar)
+
+    # Convertir a lista de dicts
+    for nombre_base, (foto, nombre_mostrar) in sorted(fotos_dict.items()):
         fotos_eds.append({
-            "slug": lugar["slug"],
-            "nombre": lugar["nombre"],
-            "tiene_foto": foto is not None,
-            "foto_url": f"/api/foto-eds/{lugar['slug']}" if foto else None,
+            "slug": nombre_base,
+            "nombre": nombre_mostrar,
+            "tiene_foto": True,
+            "foto_url": f"/api/foto-eds/{nombre_base}",
         })
+
     return fotos_eds
 
 
 def obtener_fotos_hospitales():
-    """Retorna lista de Hospitales con información de si tienen foto."""
+    """Retorna lista dinámica de Hospitales basada en fotos reales."""
     carpeta = _DATA / "fotos_hospitales"
     fotos_hospitales = []
-    for lugar in LUGARES_HOSPITALES:
-        foto = buscar_foto_de(lugar["slug"], carpeta)
+
+    if not carpeta.is_dir():
+        return fotos_hospitales
+
+    # Obtener todas las fotos únicas (por nombre base sin timestamp)
+    fotos_dict = {}  # {nombre_base: (foto_path, metadata)}
+    for foto in carpeta.glob("*.jpg"):
+        # Obtener nombre base (sin timestamp)
+        nombre_base = "_".join(foto.stem.split("_")[:-2])  # Quita _YYYYMMDD_HHMMSS
+        if nombre_base and nombre_base not in fotos_dict:
+            # Buscar metadata
+            metadata_path = carpeta / (foto.stem + ".txt")
+            nombre_mostrar = foto.stem
+            if metadata_path.is_file():
+                try:
+                    nombre_mostrar = metadata_path.read_text(encoding="utf-8").strip()
+                except:
+                    pass
+            fotos_dict[nombre_base] = (foto, nombre_mostrar)
+
+    # Convertir a lista de dicts
+    for nombre_base, (foto, nombre_mostrar) in sorted(fotos_dict.items()):
         fotos_hospitales.append({
-            "slug": lugar["slug"],
-            "nombre": lugar["nombre"],
-            "tiene_foto": foto is not None,
-            "foto_url": f"/api/foto-hospitales/{lugar['slug']}" if foto else None,
+            "slug": nombre_base,
+            "nombre": nombre_mostrar,
+            "tiene_foto": True,
+            "foto_url": f"/api/foto-hospitales/{nombre_base}",
         })
+
     return fotos_hospitales
 
 

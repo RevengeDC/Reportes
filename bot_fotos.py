@@ -175,14 +175,21 @@ def procesar_mensaje(token, msg):
             filename = f"{slug}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
             identificacion = f"{tipo_nombre} ({slug})"
         else:
-            filename = f"{tipo_nombre}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
-            identificacion = f"{tipo_nombre} (sin identificación)"
+            # Si no se identificó, usar el texto del caption limpio
+            nombre_limpio = texto.strip()[:30].replace("/", "_").replace("\\", "_")
+            filename = f"{tipo_nombre}_{nombre_limpio}_{ahora.strftime('%Y%m%d_%H%M%S')}{ext}"
+            identificacion = f"{tipo_nombre}: {nombre_limpio}"
 
         ruta = destino / filename
+        ruta_metadata = destino / (filename.replace(ext, ".txt"))
 
-        # Guardar foto (sobrescribe si es del mismo lugar)
+        # Guardar foto
         with ruta.open("wb") as f:
             f.write(data)
+
+        # Guardar caption como metadata (para mostrar nombre en UI)
+        with ruta_metadata.open("w", encoding="utf-8") as f:
+            f.write(texto.strip())
 
         print(f"[BOT-FOTOS] ✓ {identificacion}: {filename}")
         return True
