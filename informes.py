@@ -61,6 +61,26 @@ RENGLONES_SITUACION = [
     "SUCESOS",
 ]
 
+LUGARES_EDS = [
+    {"nombre": "E/S SERVICIOS POPULARES", "slug": "eds_servicios_populares"},
+    {"nombre": "E/S AUTOMOTRIZ", "slug": "eds_automotriz"},
+    {"nombre": "E/S MILAGROS", "slug": "eds_milagros"},
+    {"nombre": "E/S CALZADA", "slug": "eds_calzada"},
+    {"nombre": "E/S PICHINCHA", "slug": "eds_pichincha"},
+    {"nombre": "E/S NIGALE", "slug": "eds_nigale"},
+    {"nombre": "E/S CARMEN", "slug": "eds_carmen"},
+    {"nombre": "E/S DELICIAS", "slug": "eds_delicias"},
+]
+
+LUGARES_HOSPITALES = [
+    {"nombre": "Hospital Central", "slug": "hospital_central"},
+    {"nombre": "Hospital Clínico", "slug": "hospital_clinico"},
+    {"nombre": "Hospital Pediatría", "slug": "hospital_pediatria"},
+    {"nombre": "Hospital Cardiología", "slug": "hospital_cardiologia"},
+    {"nombre": "Clínica Los Andes", "slug": "clinica_los_andes"},
+    {"nombre": "Clínica del Este", "slug": "clinica_del_este"},
+]
+
 MESES = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO",
          "JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"]
 
@@ -97,6 +117,50 @@ def recuperar_minutas_desde_log():
     except Exception as e:
         print(f"[INFORMES] Error recuperando desde log: {e}")
         return 0
+
+
+def buscar_foto_de(slug, directorio):
+    """Busca la primera foto que coincida con el slug en el directorio."""
+    try:
+        if not Path(directorio).is_dir():
+            return None
+        for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif']:
+            fotos = list(Path(directorio).glob(ext))
+            if fotos:
+                return sorted(fotos)[0]  # Retorna la primera (más reciente)
+    except Exception:
+        pass
+    return None
+
+
+def obtener_fotos_eds():
+    """Retorna lista de EDS con información de si tienen foto."""
+    carpeta = _DATA / "fotos_eds"
+    fotos_eds = []
+    for lugar in LUGARES_EDS:
+        foto = buscar_foto_de(lugar["slug"], carpeta)
+        fotos_eds.append({
+            "slug": lugar["slug"],
+            "nombre": lugar["nombre"],
+            "tiene_foto": foto is not None,
+            "foto_url": f"/api/foto-eds/{lugar['slug']}" if foto else None,
+        })
+    return fotos_eds
+
+
+def obtener_fotos_hospitales():
+    """Retorna lista de Hospitales con información de si tienen foto."""
+    carpeta = _DATA / "fotos_hospitales"
+    fotos_hospitales = []
+    for lugar in LUGARES_HOSPITALES:
+        foto = buscar_foto_de(lugar["slug"], carpeta)
+        fotos_hospitales.append({
+            "slug": lugar["slug"],
+            "nombre": lugar["nombre"],
+            "tiene_foto": foto is not None,
+            "foto_url": f"/api/foto-hospitales/{lugar['slug']}" if foto else None,
+        })
+    return fotos_hospitales
 
 
 # ── Fechas (hora Venezuela UTC-4) ────────────────────────────────────────────

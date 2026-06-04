@@ -74,6 +74,7 @@ except SystemExit:
 from informes import (
     cargar_minutas, guardar_minutas, generar_docx, obtener_rango_horario,
     RENGLONES_SITUACION, EDS_MARACAIBO, generar_docx_situacion, recuperar_minutas_desde_log,
+    LUGARES_EDS, LUGARES_HOSPITALES, obtener_fotos_eds, obtener_fotos_hospitales, buscar_foto_de,
 )
 
 # Crear carpetas de datos al arrancar
@@ -143,9 +144,15 @@ def get_status():
             "tiene_foto": foto is not None,
             "foto_url":   f"/api/foto/cons/{lugar['slug']}" if foto else None,
         })
+
+    eds = obtener_fotos_eds()
+    hospitales = obtener_fotos_hospitales()
+
     return {
         "gubernamentales": gub,
         "consulados":      cons,
+        "eds":             eds,
+        "hospitales":      hospitales,
         "last_update_id":  estado.get("last_update_id", 0),
     }
 
@@ -155,6 +162,24 @@ def get_foto(grupo: str, slug: str):
     if grupo not in ("gub", "cons"):
         raise HTTPException(400, "grupo invalido")
     carpeta = CARPETA_GUB if grupo == "gub" else CARPETA_CONS
+    foto = buscar_foto_de(slug, carpeta)
+    if not foto:
+        raise HTTPException(404, "Foto no encontrada")
+    return FileResponse(str(foto))
+
+
+@app.get("/api/foto-eds/{slug}")
+def get_foto_eds(slug: str):
+    carpeta = _DATA_DIR / "fotos_eds"
+    foto = buscar_foto_de(slug, carpeta)
+    if not foto:
+        raise HTTPException(404, "Foto no encontrada")
+    return FileResponse(str(foto))
+
+
+@app.get("/api/foto-hospitales/{slug}")
+def get_foto_hospitales(slug: str):
+    carpeta = _DATA_DIR / "fotos_hospitales"
     foto = buscar_foto_de(slug, carpeta)
     if not foto:
         raise HTTPException(404, "Foto no encontrada")
