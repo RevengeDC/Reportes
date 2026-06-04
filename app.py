@@ -20,6 +20,9 @@ _DATA_DIR    = Path(os.environ.get("DATA_DIR", str(ROOT)))
 VENEZUELA_TZ = timezone(timedelta(hours=-4))
 sys.path.insert(0, str(ROOT))
 
+# Flag para asegurar que el bot solo se inicia una vez
+_BOT_INICIADO = False
+
 
 # ── Configuración desde variables de entorno ─────────────────────────────────
 
@@ -88,11 +91,16 @@ app = FastAPI(title="CPNB-ZULIA Monitor")
 
 @app.on_event("startup")
 def start_informes_bot():
+    global _BOT_INICIADO
+    if _BOT_INICIADO:
+        print("[APP] Bot de informes ya está corriendo (evitando duplicado).")
+        return
     try:
         from bot_informes import run_bot
         t = threading.Thread(target=run_bot, daemon=True, name="bot-informes")
         t.start()
-        print("[APP] Bot de informes iniciado en hilo daemon.")
+        _BOT_INICIADO = True
+        print("[APP] Bot de informes iniciado en hilo daemon (única instancia).")
     except Exception as e:
         print(f"[APP] Bot de informes no iniciado: {e}")
 
