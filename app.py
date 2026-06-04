@@ -334,7 +334,7 @@ def escanear_fotos_api():
         raise HTTPException(500, str(e))
 
 
-@app.post("/api/limpiar-fotos")
+@app.get("/api/limpiar-fotos")
 def limpiar_fotos_api():
     """Limpia todas las fotos de EDS y Hospitales."""
     try:
