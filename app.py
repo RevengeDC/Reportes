@@ -16,7 +16,7 @@ from typing import Optional
 import uvicorn
 
 ROOT         = Path(__file__).parent.resolve()
-_DATA_DIR    = Path(os.environ.get("DATA_DIR", str(ROOT)))
+_DATA_DIR    = ROOT / "data"
 VENEZUELA_TZ = timezone(timedelta(hours=-4))
 sys.path.insert(0, str(ROOT))
 
